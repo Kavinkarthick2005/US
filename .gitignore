@@ -1,0 +1,24 @@
+# Git ignore file for Us application workspace
+
+# SDKs
+android_sdk/
+flutter_sdk/
+
+# Environment files
+.env
+*.env
+us_app/.env
+frontend/.env
+
+# Local settings and IDEs
+.idea/
+.claude/
+*.local.json
+.vscode/
+
+# Build artifacts
+us_app/build/
+frontend/build/
+*.pyc
+.DS_Store
+node_modules/

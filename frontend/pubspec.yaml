@@ -1,0 +1,90 @@
+name: us_app
+description: Us — AI-powered couple companion app
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # --- Backend ---
+  supabase_flutter: ^2.5.6
+  firebase_core: ^3.3.0
+  firebase_messaging: ^15.1.0
+
+  # --- Navigation & State ---
+  go_router: ^14.2.7
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # --- UI ---
+  flutter_screenutil: ^5.9.3
+  google_fonts: ^6.2.1
+  glassmorphism: ^3.0.0
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  lottie: ^3.1.2
+  flutter_svg: ^2.0.10+1
+
+  # --- Networking ---
+  http: ^1.2.2
+  dio: ^5.7.0
+
+  # --- Utils ---
+  intl: ^0.19.0
+  uuid: ^4.4.2
+  image_picker: ^1.1.2
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
+  permission_handler: ^11.3.1
+  flutter_local_notifications: ^17.2.2
+  url_launcher: ^6.3.0
+  share_plus: ^10.0.2
+
+  # --- Icons ---
+  cupertino_icons: ^1.0.8
+  flutter_animate: ^4.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.12
+  riverpod_generator: ^2.4.3
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/animations/
+    - assets/icons/
+  fonts:
+    - family: PlayfairDisplay
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-Regular.ttf
+        - asset: assets/fonts/PlayfairDisplay-Italic.ttf
+          style: italic
+        - asset: assets/fonts/PlayfairDisplay-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PlayfairDisplay-BoldItalic.ttf
+          weight: 700
+          style: italic
+    - family: DMSans
+      fonts:
+        - asset: assets/fonts/DMSans_24pt-Regular.ttf
+        - asset: assets/fonts/DMSans_24pt-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/DMSans_24pt-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/DMSans_24pt-Bold.ttf
+          weight: 700
+    - family: DMMono
+      fonts:
+        - asset: assets/fonts/DMMono-Regular.ttf
+        - asset: assets/fonts/DMMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/DMMono-Italic.ttf
+          style: italic

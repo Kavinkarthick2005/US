@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "279376380668",
+    "project_id": "us-app-ab8a5",
+    "storage_bucket": "us-app-ab8a5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:279376380668:android:6b677c28368dca2667cd79",
+        "android_client_info": {
+          "package_name": "com.kavin.us_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAbeJ3bSEkFG1tNOWAQm5BTOe1neuoz2tM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
