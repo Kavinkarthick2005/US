@@ -13,6 +13,7 @@ import '../../providers/couple_provider.dart';
 import '../../providers/reminders_provider.dart';
 import '../../providers/timetable_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/pronoun_helper.dart';
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/rose_button.dart';
 
@@ -145,6 +146,8 @@ class _RemindersTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(remindersProvider);
     final tc = ref.watch(themeProvider).colors;
+    final coupleState = ref.watch(coupleProvider).valueOrNull;
+    final pronoun = coupleState?.currentUser?.partnerPronoun ?? 'she';
 
     return state.when(
       data: (_) {
@@ -188,7 +191,7 @@ class _RemindersTab extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Track her cycle & set care reminders',
+                            'Track ${PronounHelper.possessive(pronoun).toLowerCase()} cycle & set care reminders',
                             style: GoogleFonts.dmSans(
                               fontSize: 12,
                               color: Colors.white.withValues(alpha: 0.8),

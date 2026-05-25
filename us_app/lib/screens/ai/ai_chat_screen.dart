@@ -6,7 +6,9 @@ import 'package:intl/intl.dart';
 
 import '../../config/app_colors.dart';
 import '../../providers/chat_sessions_provider.dart';
+import '../../providers/couple_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/pronoun_helper.dart';
 
 class AiChatScreen extends ConsumerStatefulWidget {
   const AiChatScreen({super.key});
@@ -64,6 +66,8 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     final chatState = ref.watch(chatSessionsProvider);
     final messages = chatState.activeMessages;
     final tc = ref.watch(themeProvider).colors;
+    final coupleState = ref.watch(coupleProvider).valueOrNull;
+    final pronoun = coupleState?.currentUser?.partnerPronoun ?? 'she';
 
     if (chatState.isSendingMessage) {
       _scrollToBottom();
@@ -80,10 +84,10 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           Expanded(
             child: Column(
               children: [
-                _buildAppBar(chatState, tc),
+                _buildAppBar(chatState, tc, pronoun),
                 Expanded(
                   child: messages.isEmpty && chatState.activeSessionId == null
-                      ? _buildQuickPrompts(tc)
+                      ? _buildQuickPrompts(tc, pronoun)
                       : messages.isEmpty
                           ? _buildEmptySessionHint(tc)
                           : _buildMessageList(messages, chatState, tc),
@@ -97,7 +101,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     );
   }
 
-  Widget _buildAppBar(ChatSessionsState chatState, ThemeColors tc) {
+  Widget _buildAppBar(ChatSessionsState chatState, ThemeColors tc, String pronoun) {
     return SafeArea(
       bottom: false,
       child: Container(
@@ -156,7 +160,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    'Knows her better than anyone',
+                    'Knows ${PronounHelper.object(pronoun).toLowerCase()} better than anyone',
                     style: GoogleFonts.dmSans(
                       fontSize: 11,
                       color: tc.iconColor,
@@ -439,7 +443,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Ask me anything about her.',
+            'Ask me anything.',
             style: GoogleFonts.dmSans(fontSize: 13, color: tc.textMuted),
           ),
         ],
@@ -467,14 +471,14 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
     );
   }
 
-  Widget _buildQuickPrompts(ThemeColors tc) {
+  Widget _buildQuickPrompts(ThemeColors tc, String pronoun) {
     final prompts = [
-      "What should I cook for her tonight? 🍳",
-      "She had a tough week — what can I do? 💕",
-      "Suggest a date idea under ₹500 🗓",
-      "What does she usually crave?",
-      "Her period is soon — how can I care better?",
-      "Gift idea under ₹500 🎁",
+      "What should I cook for ${PronounHelper.object(pronoun).toLowerCase()} tonight? 🍳",
+      "${PronounHelper.subject(pronoun)} had a tough week — what can I do? 💡",
+      "Suggest a date idea under ₹1500 🍷",
+      "What does ${PronounHelper.subject(pronoun).toLowerCase()} usually crave?",
+      "${PronounHelper.possessive(pronoun)} period is soon — how can I care better?",
+      "Gift idea under ₹1500 🎁",
     ];
 
     return SingleChildScrollView(
@@ -496,7 +500,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
           const SizedBox(height: 24),
           Center(
             child: Text(
-              "How can I help you care for her today?",
+              "How can I help you care for ${PronounHelper.object(pronoun).toLowerCase()} today?",
               textAlign: TextAlign.center,
               style: GoogleFonts.playfairDisplay(
                 fontSize: 20,

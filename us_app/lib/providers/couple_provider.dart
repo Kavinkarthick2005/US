@@ -16,6 +16,7 @@ class UserModel {
   final String? partnerId;
   final String? coupleId;
   final String? fcmToken;
+  final String partnerPronoun;
 
   UserModel({
     required this.id,
@@ -26,6 +27,7 @@ class UserModel {
     this.partnerId,
     this.coupleId,
     this.fcmToken,
+    this.partnerPronoun = 'she',
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -38,6 +40,7 @@ class UserModel {
       partnerId: json['partner_id'] as String?,
       coupleId: json['couple_id'] as String?,
       fcmToken: json['fcm_token'] as String?,
+      partnerPronoun: json['partner_pronoun'] as String? ?? 'she',
     );
   }
 }
@@ -146,10 +149,21 @@ class CoupleNotifier extends AsyncNotifier<CoupleState> {
       await _supabase.from('profiles').update({'partner_id': partnerUser.id, 'couple_id': coupleId}).eq('id', myId);
       await _supabase.from('profiles').update({'partner_id': myId, 'couple_id': coupleId}).eq('id', partnerUser.id);
 
-      // 3. Auto-create default reminders for her
+      // 3. Migrate solo records to new shared couple_id
+      try {
+        await _supabase.from('memories').update({'couple_id': coupleId}).eq('couple_id', myId);
+        await _supabase.from('notes').update({'couple_id': coupleId}).eq('couple_id', myId);
+        await _supabase.from('wishlist').update({'couple_id': coupleId}).eq('couple_id', myId);
+        await _supabase.from('expenses').update({'couple_id': coupleId}).eq('couple_id', myId);
+      } catch (e) {
+        // Handle gracefully, continue if migration fails
+        print('Migration error: $e');
+      }
+
+      // 4. Auto-create default reminders for her
       await _createDefaultReminders(myId, partnerUser.id);
 
-      // 4. Refresh state
+      // 5. Refresh state
       ref.invalidateSelf();
     } catch (e) {
       state = AsyncError(e, StackTrace.current);
@@ -174,6 +188,22 @@ class CoupleNotifier extends AsyncNotifier<CoupleState> {
     } catch (e) {
       state = AsyncError(e, StackTrace.current);
       rethrow;
+    }
+  }
+
+  Future<void> updatePartnerPronoun(String pronoun) async {
+    try {
+      final myId = _supabase.auth.currentUser?.id;
+      if (myId == null) throw Exception('Not authenticated');
+
+      await _supabase
+          .from('profiles')
+          .update({'partner_pronoun': pronoun})
+          .eq('id', myId);
+
+      // Optimistic UI update can optionally be done here, but _subscribeToProfile should catch it
+    } catch (e) {
+      // Handle error if needed
     }
   }
 

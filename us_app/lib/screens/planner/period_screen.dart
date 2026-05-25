@@ -11,6 +11,7 @@ import '../../providers/period_provider.dart';
 import '../../providers/couple_provider.dart';
 import '../../providers/memory_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/pronoun_helper.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/rose_button.dart';
 
@@ -147,22 +148,15 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
 
   // No data state
   Widget _buildNoDataContent(ThemeColors tc) {
+    final pronoun = ref.watch(coupleProvider).valueOrNull?.currentUser?.partnerPronoun ?? 'she';
     return Column(
       children: [
-        const Text('🩸', style: TextStyle(fontSize: 40)),
-        const SizedBox(height: 12),
+        const Icon(Icons.favorite_border_rounded, size: 48, color: Colors.white70),
+        const SizedBox(height: 16),
         Text(
-          'No cycle logged yet',
-          style: GoogleFonts.dmSans(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: tc.textMuted,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Log her first period to start tracking',
-          style: GoogleFonts.dmSans(fontSize: 13, color: tc.textMuted),
+          'Log ${PronounHelper.possessive(pronoun).toLowerCase()} first period to start tracking',
+          style: GoogleFonts.dmSans(fontSize: 16, color: tc.textMuted),
+          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -170,6 +164,7 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
 
   // Currently on period state
   Widget _buildOnPeriodContent(PeriodCycleModel cycle, PeriodNotifier notifier, ThemeColors tc) {
+    final pronoun = ref.watch(coupleProvider).valueOrNull?.currentUser?.partnerPronoun ?? 'she';
     final today = DateTime(
         DateTime.now().year, DateTime.now().month, DateTime.now().day);
     final start = DateTime(
@@ -194,7 +189,7 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
-                'of her period',
+                'of ${PronounHelper.possessive(pronoun).toLowerCase()} period',
                 style: GoogleFonts.dmSans(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -206,7 +201,7 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Be gentle with her today 💕',
+          'Be gentle with ${PronounHelper.object(pronoun).toLowerCase()} today 💕',
           style: GoogleFonts.dmSans(fontSize: 14, color: tc.textMuted),
         ),
         const SizedBox(height: 20),
@@ -331,6 +326,7 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
 
   Widget _buildCareTips(ThemeColors tc) {
     final memoriesState = ref.watch(memoryProvider);
+    final pronoun = ref.watch(coupleProvider).valueOrNull?.currentUser?.partnerPronoun ?? 'she';
     final cardWidth =
         (MediaQuery.of(context).size.width - 40 - 12) / 2;
 
@@ -338,7 +334,7 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'How to care for her 💕',
+          'How to care for ${PronounHelper.object(pronoun).toLowerCase()} 💕',
           style: GoogleFonts.playfairDisplay(
             fontSize: 18,
             fontWeight: FontWeight.w700,
@@ -662,6 +658,7 @@ class _LogPeriodSheetState extends ConsumerState<_LogPeriodSheet> {
   @override
   Widget build(BuildContext context) {
     final tc = ref.watch(themeProvider).colors;
+    final pronoun = ref.watch(coupleProvider).valueOrNull?.currentUser?.partnerPronoun ?? 'she';
 
     return Container(
       decoration: BoxDecoration(
@@ -744,13 +741,13 @@ class _LogPeriodSheetState extends ConsumerState<_LogPeriodSheet> {
           const SizedBox(height: 28),
 
           // Cycle length slider
-          RichText(
-            text: TextSpan(
+          Text.rich(
+            TextSpan(
               style: GoogleFonts.dmSans(fontSize: 14, color: tc.textPrimary),
               children: [
-                const TextSpan(text: 'Her cycle is usually '),
+                TextSpan(text: '${PronounHelper.possessive(pronoun)} cycle is usually '),
                 TextSpan(
-                  text: '$_cycleLength',
+                  text: '$_cycleLength days',
                   style: GoogleFonts.dmSans(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,

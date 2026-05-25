@@ -211,12 +211,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
         children: [
-          // ── SECTION 1: COUPLE ROOM ────────────────────────────────────────
+          // ── SECTION 1: COUPLE ROOM ──────────────────────────────────────────────
           _buildSectionHeader('Anniversary Room 💕', tc),
           _buildCoupleCard(partner, tc),
           const SizedBox(height: 24),
 
-          // ── SECTION 2: AESTHETICS ─────────────────────────────────────────
+          // ── SECTION 1.5: PRONOUNS ─────────────────────────────────────────────
+          _buildSectionHeader('Partner Pronouns 👤', tc),
+          _buildPronounsSection(tc),
+          const SizedBox(height: 24),
+
+          // ── SECTION 2: AESTHETICS ─────────────────────────────────────────────
           _buildSectionHeader('Your Vibe 🎨', tc),
           _buildVibesSection(themeState, tc),
           const SizedBox(height: 24),
@@ -681,6 +686,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPronounsSection(ThemeColors tc) {
+    final coupleState = ref.watch(coupleProvider);
+    final myPronoun = coupleState.valueOrNull?.currentUser?.partnerPronoun ?? 'she';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: tc.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.borderColor),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'My partner uses:',
+            style: GoogleFonts.dmSans(color: tc.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: [
+              _buildPronounChip('she', 'She / Her', myPronoun, tc),
+              _buildPronounChip('he', 'He / Him', myPronoun, tc),
+              _buildPronounChip('they', 'They / Them', myPronoun, tc),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPronounChip(String value, String label, String currentValue, ThemeColors tc) {
+    final isSelected = value == currentValue;
+    return ChoiceChip(
+      label: Text(label, style: GoogleFonts.dmSans(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+      selected: isSelected,
+      selectedColor: tc.iconColor.withValues(alpha: 0.2),
+      labelStyle: TextStyle(color: isSelected ? tc.iconColor : tc.textPrimary),
+      backgroundColor: tc.inputFillColor,
+      side: BorderSide(color: isSelected ? tc.iconColor : tc.borderColor),
+      onSelected: (selected) {
+        if (selected) {
+          ref.read(coupleProvider.notifier).updatePartnerPronoun(value);
+        }
+      },
     );
   }
 

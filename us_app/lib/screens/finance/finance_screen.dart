@@ -9,6 +9,7 @@ import '../../models/expense_model.dart';
 import '../../providers/couple_provider.dart';
 import '../../providers/expense_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/pronoun_helper.dart';
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/shimmer_card.dart';
 
@@ -666,10 +667,13 @@ class _LoansTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(expenseProvider); // rebuild on data change
+    final notifier   = ref.watch(expenseProvider.notifier);
     final myLoans    = notifier.myLoans;
     final theirLoans = notifier.theirLoans;
     final total      = notifier.totalUnpaidLoans;
+    
+    final coupleState = ref.watch(coupleProvider).valueOrNull;
+    final pronoun     = coupleState?.currentUser?.partnerPronoun ?? 'she';
 
     if (myLoans.isEmpty && theirLoans.isEmpty) {
       return Center(
@@ -737,7 +741,7 @@ class _LoansTab extends ConsumerWidget {
 
         // You Owe Her
         if (myLoans.isNotEmpty) ...[
-          _loanSectionHeader('You Owe Her 💸', tc),
+          _loanSectionHeader('You Owe ${PronounHelper.object(pronoun)} 💸', tc),
           ...myLoans.map((e) => _LoanCard(
                 expense:  e,
                 amountColor: AppColors.warning,
@@ -750,7 +754,7 @@ class _LoansTab extends ConsumerWidget {
 
         // She Owes You
         if (theirLoans.isNotEmpty) ...[
-          _loanSectionHeader('She Owes You 💰', tc),
+          _loanSectionHeader('${PronounHelper.subject(pronoun)} Owes You 🥺', tc),
           ...theirLoans.map((e) => _LoanCard(
                 expense:  e,
                 amountColor: AppColors.success,

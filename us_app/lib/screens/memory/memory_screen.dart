@@ -10,6 +10,7 @@ import '../../providers/couple_provider.dart';
 import '../../providers/memory_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/category_provider.dart';
+import '../../utils/pronoun_helper.dart';
 import '../../widgets/couple_avatar.dart';
 import '../../widgets/shimmer_card.dart';
 
@@ -189,6 +190,7 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen>
     final memoryState      = ref.watch(memoryProvider);
     final filteredMemories = ref.read(memoryProvider.notifier).filteredMemories;
     final coupleState      = ref.watch(coupleProvider).valueOrNull;
+    final pronoun          = coupleState?.currentUser?.partnerPronoun ?? 'she';
 
     return Scaffold(
       backgroundColor: tc.backgroundColor,
@@ -217,7 +219,7 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen>
                       ),
                       const SizedBox(width: 16),
                       Text(
-                        'Her World',
+                        PronounHelper.world(pronoun),
                         style: GoogleFonts.playfairDisplay(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
@@ -349,7 +351,7 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen>
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Start saving what makes her, her. 💕',
+                            'Start saving what makes ${PronounHelper.object(pronoun).toLowerCase()}, ${PronounHelper.object(pronoun).toLowerCase()}. 💕',
                             style: GoogleFonts.dmSans(
                               fontSize: 15,
                               color: tc.textMuted,

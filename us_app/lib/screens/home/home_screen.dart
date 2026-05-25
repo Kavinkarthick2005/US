@@ -11,8 +11,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../config/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/couple_provider.dart';
+import '../../providers/notes_provider.dart';
+import '../../providers/period_provider.dart';
 import '../../providers/reminders_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/pronoun_helper.dart';
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/couple_avatar.dart';
 import '../../widgets/glass_card.dart';
@@ -138,6 +141,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final currentUser  = ref.watch(currentUserProvider);
     final coupleState  = ref.watch(coupleProvider);
     final partner      = coupleState.valueOrNull?.partner;
+    final pronoun      = coupleState.valueOrNull?.currentUser?.partnerPronoun ?? 'she';
     final themeState   = ref.watch(themeProvider);
     final tc           = themeState.colors;
     final wallpaperPath = themeState.wallpaperPath;
@@ -229,7 +233,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               const EdgeInsets.only(top: 24, left: 20, right: 20, bottom: 40),
           sliver: SliverList(
             delegate: SliverChildListDelegate([
-              _buildPartnerCard(partner, tc),
+              _buildPartnerCard(partner, tc, pronoun),
               const SizedBox(height: 32),
               _buildSectionTitle('Today', tc),
               const SizedBox(height: 12),
@@ -261,7 +265,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ],
               ),
               const SizedBox(height: 12),
-              _buildRecentMemories(tc),
+              _buildRecentMemories(tc, pronoun),
               const SizedBox(height: 32),
               _buildStatsRow(tc),
             ]),
@@ -313,7 +317,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   // ── WIDGET BUILDERS ────────────────────────────────────────────────────────
 
-  Widget _buildPartnerCard(dynamic partner, ThemeColors tc) {
+  Widget _buildPartnerCard(dynamic partner, ThemeColors tc, String pronoun) {
     if (partner == null) {
       return Container(
         decoration: BoxDecoration(
@@ -356,7 +360,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Tap to link with her 💕',
+                          'Tap to link with ${PronounHelper.object(pronoun).toLowerCase()} 💕',
                           style: GoogleFonts.playfairDisplay(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -653,7 +657,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  Widget _buildRecentMemories(ThemeColors tc) {
+  Widget _buildRecentMemories(ThemeColors tc, String pronoun) {
     final memoriesState = ref.watch(_recentMemoriesProvider);
 
     return memoriesState.when(
@@ -669,7 +673,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
             alignment: Alignment.center,
             child: Text(
-              'Add your first memory about her 💕',
+              'Add your first memory about ${PronounHelper.object(pronoun).toLowerCase()} 💕',
               style: GoogleFonts.dmSans(
                 fontSize: 14,
                 color: tc.textMuted,

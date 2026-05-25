@@ -9,6 +9,7 @@ import '../../providers/couple_provider.dart';
 import '../../providers/memory_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/category_provider.dart';
+import '../../utils/pronoun_helper.dart';
 import '../../widgets/rose_button.dart';
 
 class AddMemoryScreen extends ConsumerStatefulWidget {
@@ -81,6 +82,8 @@ class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
     final hasContent = _contentController.text.trim().isNotEmpty;
     final canSave = hasContent && _selectedCategory != null;
     final tc = ref.watch(themeProvider).colors;
+    final coupleState = ref.watch(coupleProvider).valueOrNull;
+    final pronoun = coupleState?.currentUser?.partnerPronoun ?? 'she';
 
     final categories = ref.watch(categoryProvider);
     
@@ -92,10 +95,11 @@ class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
         // Adjust pronouns if it's about "Me"
         currentSuggestions = currentSuggestions.map((s) {
           return s
-              .replaceAll('She ', 'I ')
-              .replaceAll('Her ', 'My ')
-              .replaceAll('she ', 'I ')
-              .replaceAll('her ', 'my ');
+              .replaceAll('${PronounHelper.subject(pronoun)} ', 'I ')
+              .replaceAll('${PronounHelper.possessive(pronoun)} ', 'My ')
+              .replaceAll('${PronounHelper.subject(pronoun).toLowerCase()} ', 'I ')
+              .replaceAll('${PronounHelper.possessive(pronoun).toLowerCase()} ', 'my ')
+              .replaceAll('${PronounHelper.object(pronoun).toLowerCase()} ', 'me ');
         }).toList();
       }
     }
@@ -201,7 +205,7 @@ class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
                           ),
                           alignment: Alignment.center,
                           child: Text(
-                            'About Her',
+                            'About ${PronounHelper.object(pronoun).substring(0,1).toUpperCase()}${PronounHelper.object(pronoun).substring(1)}',
                             style: GoogleFonts.dmSans(
                               fontWeight:
                                   _aboutHer ? FontWeight.w600 : FontWeight.w500,

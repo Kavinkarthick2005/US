@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../config/app_colors.dart';
 import '../../providers/couple_provider.dart';
+import '../../utils/pronoun_helper.dart';
 import '../../widgets/rose_button.dart';
 
 class CoupleLinkScreen extends ConsumerStatefulWidget {
@@ -107,6 +108,7 @@ class _CoupleLinkScreenState extends ConsumerState<CoupleLinkScreen>
   @override
   Widget build(BuildContext context) {
     final coupleState = ref.watch(coupleProvider);
+    final pronoun = coupleState.valueOrNull?.currentUser?.partnerPronoun ?? 'she';
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -131,7 +133,7 @@ class _CoupleLinkScreenState extends ConsumerState<CoupleLinkScreen>
                   child: Column(
                     children: [
                       Text(
-                        "Connect with her 💕",
+                        "Connect with ${PronounHelper.object(pronoun).toLowerCase()} 💕",
                         style: GoogleFonts.playfairDisplay(
                           fontSize: 24,
                           color: Colors.white,
@@ -161,7 +163,7 @@ class _CoupleLinkScreenState extends ConsumerState<CoupleLinkScreen>
                 const SizedBox(height: 16),
 
                 // SECTION 2 — ENTER CODE
-                _buildEnterCodeCard(),
+                _buildEnterCodeCard(pronoun),
 
                 const SizedBox(height: 24),
 
@@ -296,7 +298,7 @@ class _CoupleLinkScreenState extends ConsumerState<CoupleLinkScreen>
     );
   }
 
-  Widget _buildEnterCodeCard() {
+  Widget _buildEnterCodeCard(String pronoun) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(24),
@@ -314,7 +316,7 @@ class _CoupleLinkScreenState extends ConsumerState<CoupleLinkScreen>
       child: Column(
         children: [
           Text(
-            "HER CODE",
+            "${PronounHelper.possessive(pronoun).toUpperCase()} CODE",
             style: GoogleFonts.dmMono(
               fontSize: 11,
               color: AppColors.rose,
