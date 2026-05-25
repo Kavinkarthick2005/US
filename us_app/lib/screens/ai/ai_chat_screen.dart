@@ -244,7 +244,7 @@ class _AiChatScreenState extends ConsumerState<AiChatScreen> {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
                 onPressed: () {
-                  ref.read(chatSessionsProvider.notifier).createNewSession();
+                  ref.read(chatSessionsProvider.notifier).startNewChat();
                   setState(() => _showSidebar = false);
                 },
                 icon: const Icon(Icons.add_rounded, size: 18),

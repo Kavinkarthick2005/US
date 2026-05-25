@@ -60,7 +60,8 @@ class MemoryModel {
   static const String catMood = 'mood';
   static const String catHabit = 'habit';
   static const String catJoke = 'joke';
-  static const String catDislike = 'dislike';
+  static const String catGift = 'gift';
+  static const String catDislike = 'dislike'; // Kept for legacy
   static const String catRecipe = 'recipe';
   static const String catGeneral = 'general';
 }

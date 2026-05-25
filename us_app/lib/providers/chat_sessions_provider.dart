@@ -152,10 +152,7 @@ class ChatSessionsNotifier extends StateNotifier<ChatSessionsState> {
           .toList();
 
       state = state.copyWith(sessions: sessions);
-
-      if (sessions.isNotEmpty) {
-        await selectSession(sessions.first.id);
-      }
+      // We no longer auto-select the first session so it acts like a "New Chat" by default.
     } catch (_) {
       // Table may not exist yet — graceful fallback
       state = state.copyWith(sessions: []);
@@ -226,6 +223,13 @@ class ChatSessionsNotifier extends StateNotifier<ChatSessionsState> {
       sessions: [session, ...state.sessions],
       activeSessionId: session.id,
     );
+  }
+
+  void startNewChat() {
+    if (state.activeSessionId != null) {
+      cleanupEmptySession(state.activeSessionId);
+    }
+    state = state.copyWith(clearActiveSession: true);
   }
 
   Future<void> sendMessage(String text) async {

@@ -14,10 +14,10 @@ class CategoryNotifier extends StateNotifier<List<Map<String, dynamic>>> {
 
   List<Map<String, dynamic>> _getDefaultCategories(String p) {
     return [
-      {'label': '🍕 Food', 'id': MemoryModel.catFood, 'sug': ['${PronounHelper.subject(p)} loves', '${PronounHelper.subject(p)} hates', '${PronounHelper.possessive(p)} comfort food is']},
+      {'label': '🍕 Food', 'id': MemoryModel.catFood, 'sug': ['${PronounHelper.subject(p)} loves', '${PronounHelper.subject(p)} craves', '${PronounHelper.possessive(p)} comfort food is']},
       {'label': '🏕️ Places', 'id': MemoryModel.catPlace, 'sug': ['${PronounHelper.possessive(p)} favourite spot is', '${PronounHelper.subject(p)} wants to visit', 'We had our first date at']},
       {'label': '🧘 Habits', 'id': MemoryModel.catHabit, 'sug': ['Every morning ${PronounHelper.subject(p).toLowerCase()}', '${PronounHelper.subject(p)} always', 'Before bed ${PronounHelper.subject(p).toLowerCase()}']},
-      {'label': '👎 Dislikes', 'id': MemoryModel.catDislike, 'sug': ['${PronounHelper.subject(p)} really dislikes', 'Never buy ${PronounHelper.object(p).toLowerCase()}', '${PronounHelper.subject(p)} gets annoyed by']},
+      {'label': '🎁 Gifts', 'id': MemoryModel.catGift, 'sug': ['${PronounHelper.subject(p)} wants to buy', 'Dream gift for ${PronounHelper.object(p).toLowerCase()}', 'Perfect surprise would be']},
       {'label': '😂 Jokes', 'id': MemoryModel.catJoke, 'sug': ['Inside joke:', '${PronounHelper.subject(p)} always laughs at', 'Funny moment:']},
       {'label': '🥘 Recipes', 'id': MemoryModel.catRecipe, 'sug': ['${PronounHelper.possessive(p)} secret ingredient is', '${PronounHelper.subject(p)} makes the best', 'Recipe for']},
     ];

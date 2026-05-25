@@ -15,16 +15,26 @@ void main() async {
 
   // Firebase + notifications only on mobile (no web Firebase project configured)
   if (!kIsWeb) {
-    await Firebase.initializeApp();
-    tz.initializeTimeZones();
-    await FCMService.init();
+    try {
+      await Firebase.initializeApp();
+      tz.initializeTimeZones();
+      // Do not await FCMService.init() here because requesting permissions before runApp
+      // can cause an instant crash in release mode on Android 13+
+      FCMService.init().catchError((e) => debugPrint("FCM Error: $e"));
+    } catch (e) {
+      debugPrint("Firebase init error: $e");
+    }
   }
 
   // Init Supabase
-  await Supabase.initialize(
-    url: Env.supabaseUrl,
-    anonKey: Env.supabaseAnonKey,
-  );
+  try {
+    await Supabase.initialize(
+      url: Env.supabaseUrl,
+      anonKey: Env.supabaseAnonKey,
+    );
+  } catch (e) {
+    debugPrint("Supabase init error: $e");
+  }
 
   runApp(const ProviderScope(child: UsApp()));
 }

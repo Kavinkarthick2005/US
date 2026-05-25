@@ -346,10 +346,16 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
           loading: () => const CircularProgressIndicator(),
           error: (_, __) => const SizedBox(),
           data: (memories) {
-            final tips = memories.where((m) => 
-                m.category.toLowerCase() == 'habit' || 
-                m.category.toLowerCase() == 'food' ||
-                m.category.toLowerCase() == 'care').toList();
+            final tips = memoriesState.valueOrNull?.where((m) {
+          final isCareCategory = m.category.toLowerCase() == 'food' ||
+                                 m.category.toLowerCase() == 'care' ||
+                                 m.category.toLowerCase() == 'gift';
+          final contentLower = m.content.toLowerCase();
+          final isNegative = contentLower.contains('hate') || 
+                             contentLower.contains('dislike') || 
+                             contentLower.contains('never');
+          return isCareCategory && !isNegative;
+        }).toList() ?? [];
             
             return Column(
               children: [
