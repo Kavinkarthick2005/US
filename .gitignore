@@ -10,6 +10,12 @@ flutter_sdk/
 us_app/.env
 frontend/.env
 
+# Firebase / Google Services
+google-services.json
+GoogleService-Info.plist
+**/google-services.json
+**/GoogleService-Info.plist
+
 # Local settings and IDEs
 .idea/
 .claude/
