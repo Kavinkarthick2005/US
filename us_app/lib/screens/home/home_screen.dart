@@ -596,6 +596,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       {'icon': Icons.psychology_rounded,              'label': 'Add Memory 🧠',    'route': '/memory/add'},
       {'icon': Icons.restaurant_rounded,             'label': 'Log Food 🍛',      'route': '/food/add'},
       {'icon': Icons.account_balance_wallet_rounded, 'label': 'Add Expense 💸',   'route': '/finance/add'},
+      {'icon': Icons.shopping_bag_outlined,          'label': 'Wishlist 🛍️',      'route': '/wishlist'},
       {'icon': Icons.auto_awesome_rounded,           'label': 'Ask AI ✨',         'route': '/ai-chat'},
       {'icon': Icons.water_drop_rounded,             'label': 'Cycle Tracker 🌸', 'route': '/planner/period'},
       {'icon': Icons.note_alt_rounded,               'label': 'Notes 📝',         'route': '/notes'},

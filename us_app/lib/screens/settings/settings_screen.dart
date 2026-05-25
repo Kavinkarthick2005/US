@@ -226,7 +226,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _buildRemindersSection(tc),
           const SizedBox(height: 24),
 
-          // ── SECTION 4: ABOUT ──────────────────────────────────────────────
+          // ── SECTION 4: WISHLIST PIN ───────────────────────────────────────
+          _buildSectionHeader('Wishlist PIN 🔒', tc),
+          _buildPinSection(tc),
+          const SizedBox(height: 24),
+
+          // ── SECTION 5: ABOUT ──────────────────────────────────────────────
           const SizedBox(height: 16),
           Center(
             child: Column(
@@ -740,6 +745,86 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       secondary: Icon(icon, color: tc.iconColor, size: 20),
       activeColor: tc.iconColor,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+    );
+  }
+
+  Widget _buildPinSection(ThemeColors tc) {
+    return Container(
+      decoration: BoxDecoration(
+        color: tc.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.borderColor),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Keep your hidden wishlist items safe.',
+            style: GoogleFonts.dmSans(color: tc.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: tc.iconColor.withValues(alpha: 0.15),
+              foregroundColor: tc.iconColor,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.lock_outline_rounded, size: 18),
+            label: Text('Set / Change PIN', style: GoogleFonts.dmSans(fontWeight: FontWeight.bold)),
+            onPressed: _showPinDialog,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPinDialog() {
+    final tc = ref.read(themeProvider).colors;
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: tc.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Wishlist PIN', style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.bold, color: tc.textPrimary)),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: TextInputType.number,
+          maxLength: 4,
+          obscureText: true,
+          decoration: InputDecoration(
+            hintText: 'Enter 4-digit PIN',
+            hintStyle: GoogleFonts.dmSans(color: tc.textMuted),
+            counterText: '',
+          ),
+          style: GoogleFonts.dmSans(color: tc.textPrimary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: GoogleFonts.dmSans(color: tc.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.rose,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () async {
+              if (ctrl.text.length == 4) {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('wishlist_pin', ctrl.text);
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN saved!')));
+                }
+              }
+            },
+            child: Text('Save', style: GoogleFonts.dmSans(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 }
