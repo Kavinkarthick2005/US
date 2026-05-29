@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/app_colors.dart';
 
@@ -236,6 +239,20 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
       final isDark      = prefs.getBool(_prefIsDark) ?? false;
       final originals   = prefs.getBool(_prefOriginals) ?? false;
 
+      // Sync originals unlock with Supabase
+      bool sbOriginals = originals;
+      try {
+        final sb = Supabase.instance.client;
+        final user = sb.auth.currentUser;
+        if (user != null) {
+          final profile = await sb.from('profiles').select('originals_unlocked').eq('id', user.id).maybeSingle();
+          if (profile != null && profile['originals_unlocked'] == true) {
+            sbOriginals = true;
+            await prefs.setBool(_prefOriginals, true);
+          }
+        }
+      } catch (_) {}
+
       Color accent = AppColors.rose;
       if (accentHex != null) {
         final val = int.tryParse(accentHex, radix: 16);
@@ -247,7 +264,7 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
         accentColor:         accent,
         wallpaperPath:       wallpaper,
         isDark:              isDark,
-        isOriginalsUnlocked: originals,
+        isOriginalsUnlocked: sbOriginals,
       );
     } catch (_) {}
   }
@@ -305,7 +322,28 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_prefOriginals, true);
+      
+      final sb = Supabase.instance.client;
+      final user = sb.auth.currentUser;
+      if (user != null) {
+        await sb.from('profiles').update({'originals_unlocked': true}).eq('id', user.id);
+      }
     } catch (_) {}
+  }
+  
+  bool verifyAnswer(int questionNumber, String answer) {
+    final bytes = utf8.encode(answer.trim().toLowerCase());
+    final digest = sha256.convert(bytes);
+    final hash = digest.toString();
+
+    if (questionNumber == 1) {
+      return hash == '670671cd97404156226e507973f2ab8330d3022ca96e0c93bdbdb320c41adcaf';
+    } else if (questionNumber == 2) {
+      return hash == 'c2deeb1fe8fec7f83d45a0784dd01968301aadc6223d9a51b2b504dd46a9ed36';
+    } else if (questionNumber == 3) {
+      return hash == 'ce83293c66150ed42f52747cca6a91b85332c740cde625195b15f1abb4b90196';
+    }
+    return false;
   }
 
   Future<Color> extractPaletteFromImage(File imageFile) async {

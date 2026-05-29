@@ -67,7 +67,7 @@ CustomTransitionPage<void> _slideUp(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
     key: state.pageKey,
     child: child,
-    transitionDuration: const Duration(milliseconds: 320),
+    transitionDuration: const Duration(milliseconds: 300),
     transitionsBuilder: (context, animation, _, child) {
       final curved = CurvedAnimation(
         parent: animation,
@@ -77,11 +77,33 @@ CustomTransitionPage<void> _slideUp(GoRouterState state, Widget child) {
         opacity: curved,
         child: SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0, 0.07),
+            begin: const Offset(0, 0.04),
             end: Offset.zero,
           ).animate(curved),
           child: child,
         ),
+      );
+    },
+  );
+}
+
+/// Horizontal slide for space switching
+CustomTransitionPage<void> _slideHorizontal(GoRouterState state, Widget child, double dx) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 300),
+    transitionsBuilder: (context, animation, _, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+      );
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset(dx, 0),
+          end: Offset.zero,
+        ).animate(curved),
+        child: child,
       );
     },
   );
@@ -155,7 +177,12 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'recap',
           name: 'recap',
-          pageBuilder: (c, s) => _slideUp(s, const MonthlyRecapScreen()),
+          pageBuilder: (c, s) {
+            final now = DateTime.now();
+            final month = int.tryParse(s.uri.queryParameters['month'] ?? '') ?? now.month;
+            final year = int.tryParse(s.uri.queryParameters['year'] ?? '') ?? now.year;
+            return _slideUp(s, MonthlyRecapScreen(month: month, year: year));
+          },
         ),
         GoRoute(
           path: 'open-when',
@@ -209,7 +236,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/he-space',
       name: 'he-space',
-      pageBuilder: (c, s) => _slideUp(s, const HeSpaceScreen()),
+      pageBuilder: (c, s) => _slideHorizontal(s, const HeSpaceScreen(), -1.0),
       routes: [
         GoRoute(
           path: 'partner-care',
@@ -267,7 +294,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/she-space',
       name: 'she-space',
-      pageBuilder: (c, s) => _slideUp(s, const SheSpaceScreen()),
+      pageBuilder: (c, s) => _slideHorizontal(s, const SheSpaceScreen(), 1.0),
       routes: [
         GoRoute(
           path: 'journal',

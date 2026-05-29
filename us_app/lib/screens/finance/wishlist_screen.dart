@@ -16,6 +16,8 @@ import '../../providers/couple_provider.dart';
 import '../../providers/wishlist_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/rose_button.dart';
+import '../../widgets/empty_state.dart';
+import 'package:flutter/services.dart';
 
 String _rupees(double v) => '₹${NumberFormat('#,##0').format(v.toInt())}';
 
@@ -422,25 +424,29 @@ class _TabContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty && hiddenItems.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(emptyMessage, style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w600, color: tc.textPrimary)),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: onAdd,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.blush,
-                foregroundColor: AppColors.rose,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text('Add Item', style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          EmptyState(
+            emoji: emptyMessage.split(' ').last, // Assumes emoji is at the end
+            title: 'Nothing yet',
+            subtitle: emptyMessage.replaceAll(emptyMessage.split(' ').last, '').trim(),
+            textColor: tc.textPrimary,
+            subtitleColor: tc.textMuted,
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: onAdd,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.blush,
+              foregroundColor: AppColors.rose,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-          ],
-        ),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: Text('Add Item', style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
+          ),
+        ],
       );
     }
 
@@ -476,6 +482,7 @@ class _WishlistItemCardState extends ConsumerState<_WishlistItemCard> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancel', style: GoogleFonts.dmSans(color: widget.tc.textMuted))),
           TextButton(
             onPressed: () {
+              HapticFeedback.lightImpact();
               ref.read(wishlistProvider.notifier).deleteItem(widget.item.id);
               Navigator.pop(ctx);
             },
@@ -586,6 +593,7 @@ class _WishlistItemCardState extends ConsumerState<_WishlistItemCard> {
                         ),
                         child: Text(item.visibility == 'theirs' ? 'Mark as gifted 🎁' : (item.visibility == 'shared' ? 'Done it! 🎉' : 'Done ✓'), style: GoogleFonts.dmSans(fontWeight: FontWeight.bold)),
                         onPressed: () {
+                          HapticFeedback.mediumImpact();
                           ref.read(wishlistProvider.notifier).markDone(item.id);
                           _showConfetti(context);
                         },

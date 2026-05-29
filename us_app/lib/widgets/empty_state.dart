@@ -1,103 +1,102 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../providers/theme_provider.dart';
+class EmptyState extends StatelessWidget {
+  final String emoji;
+  final String title;
+  final String subtitle;
+  final Color textColor;
+  final Color subtitleColor;
 
-class EmptyState extends ConsumerStatefulWidget {
   const EmptyState({
     super.key,
     required this.emoji,
     required this.title,
     required this.subtitle,
-    this.actionLabel,
-    this.onAction,
+    this.textColor = Colors.white,
+    this.subtitleColor = Colors.white70,
   });
-
-  final String emoji;
-  final String title;
-  final String subtitle;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  ConsumerState<EmptyState> createState() => _EmptyStateState();
-}
-
-class _EmptyStateState extends ConsumerState<EmptyState>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _float;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    _float = Tween<double>(begin: -6, end: 6).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    final tc = ref.watch(themeProvider).colors;
-
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedBuilder(
-              animation: _float,
-              builder: (_, __) => Transform.translate(
-                offset: Offset(0, _float.value),
-                child: Text(widget.emoji,
-                    style: const TextStyle(fontSize: 64)),
-              ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 48))
+              .animate(onPlay: (c) => c.repeat(reverse: true))
+              .slideY(duration: 1500.ms, begin: 0, end: 0.15, curve: Curves.easeInOut),
+          const SizedBox(height: 24),
+          Text(
+            title,
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: textColor,
             ),
-            const SizedBox(height: 20),
-            Text(
-              widget.title,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              subtitle,
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                color: subtitleColor,
+              ),
               textAlign: TextAlign.center,
-              style: GoogleFonts.playfairDisplay(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                
-                color: tc.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class GenericErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  final Color textColor;
+
+  const GenericErrorState({
+    super.key,
+    this.message = 'Something went wrong.',
+    required this.onRetry,
+    this.textColor = Colors.white,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('⚠️', style: TextStyle(fontSize: 40)),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            style: GoogleFonts.dmSans(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: textColor,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: Icon(Icons.refresh_rounded, color: textColor.withValues(alpha: 0.8)),
+            label: Text(
+              'Try again',
+              style: GoogleFonts.dmSans(
+                color: textColor.withValues(alpha: 0.8),
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              widget.subtitle,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.dmSans(fontSize: 14, color: tc.textMuted),
-            ),
-            if (widget.actionLabel != null && widget.onAction != null) ...[
-              const SizedBox(height: 24),
-              TextButton(
-                onPressed: widget.onAction,
-                child: Text(
-                  widget.actionLabel!,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: tc.iconColor,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

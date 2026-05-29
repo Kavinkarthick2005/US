@@ -8,6 +8,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/drops_provider.dart';
 import '../../widgets/v2/drop_card.dart';
 import '../../widgets/v2/space_header.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/shimmer_card.dart';
+import '../../services/analytics_service.dart';
+import 'package:flutter/services.dart';
 
 class DropsScreen extends ConsumerStatefulWidget {
   const DropsScreen({super.key});
@@ -75,6 +79,7 @@ class _DropsScreenState extends ConsumerState<DropsScreen> {
     if (confirmed == true) {
       try {
         await ref.read(dropsProvider.notifier).deleteDrop(dropId);
+        HapticFeedback.lightImpact();
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -182,118 +187,55 @@ class _DropsScreenState extends ConsumerState<DropsScreen> {
   }
 
   Widget _buildShimmerLoading() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      itemCount: 5,
-      itemBuilder: (context, index) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          height: 280,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            color: Colors.white.withOpacity(0.05),
-          ),
-        )
-            .animate(onPlay: (c) => c.repeat())
-            .shimmer(
-              duration: const Duration(milliseconds: 1200),
-              color: Colors.white.withOpacity(0.1),
-            );
-      },
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: ShimmerList(itemCount: 4, itemHeight: 280),
     );
   }
 
   Widget _buildError(String message) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
-          const SizedBox(height: 16),
-          Text(
-            'Something went wrong',
-            style: GoogleFonts.playfairDisplay(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              fontStyle: FontStyle.normal,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            message,
-            style: GoogleFonts.dmSans(
-              color: Colors.white54,
-              fontSize: 13,
-              fontStyle: FontStyle.normal,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+    return GenericErrorState(
+      message: 'Failed to load drops.',
+      onRetry: () => ref.invalidate(dropsProvider),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            '📸',
-            style: TextStyle(fontSize: 48),
-          ).animate().scale(
-                duration: const Duration(milliseconds: 600),
-                curve: Curves.elasticOut,
-              ),
-          const SizedBox(height: 20),
-          Text(
-            'Drop a moment',
-            style: GoogleFonts.playfairDisplay(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              fontStyle: FontStyle.normal,
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const EmptyState(
+          emoji: '📸',
+          title: 'No moments yet',
+          subtitle: 'Send your first moment',
+        ),
+        const SizedBox(height: 32),
+        ElevatedButton(
+          onPressed: () => context.go('/us-space/drops/add'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFE91E8C),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
             ),
-          ).animate().fadeIn(delay: const Duration(milliseconds: 200)),
-          const SizedBox(height: 10),
-          Text(
-            'Share photos and music with each other',
+            elevation: 8,
+            shadowColor: const Color(0xFFE91E8C).withValues(alpha: 0.4),
+          ),
+          child: Text(
+            'Add Drop',
             style: GoogleFonts.dmSans(
-              color: Colors.white54,
-              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
               fontStyle: FontStyle.normal,
             ),
-            textAlign: TextAlign.center,
-          ).animate().fadeIn(delay: const Duration(milliseconds: 350)),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () => context.go('/us-space/drops/add'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE91E8C),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-              elevation: 8,
-              shadowColor: const Color(0xFFE91E8C).withOpacity(0.4),
+          ),
+        ).animate().fadeIn(delay: const Duration(milliseconds: 500)).slideY(
+              begin: 0.2,
+              end: 0,
+              delay: const Duration(milliseconds: 500),
             ),
-            child: Text(
-              'Add Drop',
-              style: GoogleFonts.dmSans(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-                fontStyle: FontStyle.normal,
-              ),
-            ),
-          ).animate().fadeIn(delay: const Duration(milliseconds: 500)).slideY(
-                begin: 0.2,
-                end: 0,
-                delay: const Duration(milliseconds: 500),
-              ),
-        ],
-      ),
+      ],
     );
   }
 }

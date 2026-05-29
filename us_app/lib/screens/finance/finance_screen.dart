@@ -119,7 +119,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
             child: expenseState.when(
               loading: () => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: ShimmerList(count: 4, baseColor: tc.cardColor, highlightColor: tc.borderColor),
+                child: ShimmerList(itemCount: 4),
               ),
               error: (e, _) =>
                   Center(child: Text('Error: $e', style: GoogleFonts.dmSans(color: tc.textPrimary))),

@@ -7,7 +7,12 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/services.dart';
+import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../services/analytics_service.dart';
 
 import '../../config/app_colors.dart';
 import '../../providers/auth_provider.dart';
@@ -32,6 +37,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _extractingColor = false;
 
   bool _showOriginalsOverlay = false;
+  bool _hasPin = false;
+  int _versionTaps = 0;
+
+  final _secureStorage = const FlutterSecureStorage();
 
   @override
   void initState() {
@@ -46,6 +55,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final food      = prefs.getBool('reminder_daily_food') ?? true;
       final water     = prefs.getBool('reminder_hydration')  ?? true;
       final cycle     = prefs.getBool('reminder_period')     ?? true;
+      
+      final pin = await _secureStorage.read(key: 'wishlist_pin');
 
       setState(() {
         if (savedDate != null) {
@@ -54,6 +65,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _dailyFood = food;
         _hydration = water;
         _period    = cycle;
+        _hasPin    = pin != null && pin.isNotEmpty;
       });
     } catch (_) {}
   }
@@ -87,6 +99,84 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         );
       }
     }
+  }
+
+  void _showUnlinkDialog() {
+    String typed = '';
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1A0A0F),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Colors.redAccent, width: 1.5),
+              ),
+              title: Text(
+                'Are you sure?',
+                style: GoogleFonts.playfairDisplay(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'This will:\n• remove your couple connection\n• stop shared syncing\n• disable shared spaces\n\nYour personal data remains safe.',
+                    style: GoogleFonts.dmSans(color: Colors.white70, fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Type UNLINK to confirm.',
+                    style: GoogleFonts.dmSans(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    autofocus: true,
+                    style: GoogleFonts.dmSans(color: Colors.white),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.black26,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.redAccent),
+                      ),
+                    ),
+                    onChanged: (val) {
+                      setStateDialog(() => typed = val);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text('Cancel', style: GoogleFonts.dmSans(color: Colors.white70)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: typed == 'UNLINK' ? () async {
+                    HapticFeedback.mediumImpact();
+                    Navigator.pop(ctx);
+                    await ref.read(coupleProvider.notifier).unlinkPartner();
+                    if (mounted) context.go('/login');
+                  } : null,
+                  child: const Text('Unlink Partner'),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
   }
 
   Future<void> _pickWallpaper() async {
@@ -149,6 +239,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _onOriginalsUnlocked() {
+    HapticFeedback.mediumImpact();
+    AnalyticsService.logThemeUnlocked('The Originals');
     setState(() => _showOriginalsOverlay = true);
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) setState(() => _showOriginalsOverlay = false);
@@ -205,6 +297,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               // ── SECTION: ACCOUNT ─────────────────────────────────────────────
               _buildSectionHeader('Account 👤', tc),
               _buildAccountSection(tc),
+              const SizedBox(height: 24),
+
+              // ── SECTION: WISHLIST PIN ────────────────────────────────────────
+              _buildSectionHeader('Security 🔒', tc),
+              _buildWishlistPinSection(tc),
               const SizedBox(height: 24),
 
               // ── SECTION: SMART REMINDERS ─────────────────────────────────────
@@ -347,33 +444,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     size: 16,
                                   ),
                                 ),
-                              Positioned(
-                                bottom: 6,
-                                left: 6,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: preview.iconColor,
-                                    shape: BoxShape.circle,
+                              if (def.key == MoodThemes.theOriginals)
+                                Positioned(
+                                  top: 6,
+                                  left: 6,
+                                  child: const Icon(Icons.star_rounded, color: Color(0xFFD4AF37), size: 14)
+                                      .animate(onPlay: (c) => c.repeat(reverse: true))
+                                      .scale(duration: 1.seconds, begin: const Offset(0.9, 0.9), end: const Offset(1.2, 1.2)),
+                                )
+                              else
+                                Positioned(
+                                  bottom: 6,
+                                  left: 6,
+                                  child: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: preview.iconColor,
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        def.name,
-                        style: GoogleFonts.dmSans(
-                          fontSize: 10,
-                          fontWeight: isActive
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: tc.textPrimary,
-                          fontStyle: FontStyle.normal,
-                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            def.name,
+                            style: GoogleFonts.dmSans(
+                              fontSize: 10,
+                              fontWeight: isActive
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: def.key == MoodThemes.theOriginals ? const Color(0xFFD4AF37) : tc.textPrimary,
+                              fontStyle: def.key == MoodThemes.theOriginals ? FontStyle.italic : FontStyle.normal,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -663,18 +774,86 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 16),
           Divider(height: 1, color: tc.borderColor),
-          const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: _selectStartDate,
-            icon: Icon(Icons.calendar_month_rounded,
-                color: tc.iconColor, size: 18),
-            label: Text(
-              'Edit Start Date',
-              style: GoogleFonts.dmSans(
-                  color: tc.iconColor,
-                  fontWeight: FontWeight.w500,
-                  fontStyle: FontStyle.normal),
+          
+          // Pronouns Selector
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Partner Pronouns',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 14,
+                    color: tc.textSecondary,
+                    fontStyle: FontStyle.normal,
+                  ),
+                ),
+                Row(
+                  children: ['she', 'he', 'they'].map((p) {
+                    final isSelected = partner?.partnerPronoun == p;
+                    return Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: GestureDetector(
+                        onTap: () {
+                          ref.read(coupleProvider.notifier).updatePartnerPronoun(p);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSelected ? tc.iconColor.withValues(alpha: 0.15) : Colors.transparent,
+                            border: Border.all(
+                              color: isSelected ? tc.iconColor : tc.borderColor,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            p == 'she' ? 'She/Her' : p == 'he' ? 'He/Him' : 'They/Them',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 12,
+                              color: isSelected ? tc.iconColor : tc.textMuted,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
+          ),
+          Divider(height: 1, color: tc.borderColor),
+          const SizedBox(height: 8),
+          
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              TextButton.icon(
+                onPressed: _selectStartDate,
+                icon: Icon(Icons.calendar_month_rounded,
+                    color: tc.iconColor, size: 18),
+                label: Text(
+                  'Start Date',
+                  style: GoogleFonts.dmSans(
+                      color: tc.iconColor,
+                      fontWeight: FontWeight.w500,
+                      fontStyle: FontStyle.normal),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _showUnlinkDialog,
+                icon: const Icon(Icons.link_off_rounded,
+                    color: Colors.redAccent, size: 18),
+                label: Text(
+                  'Unlink',
+                  style: GoogleFonts.dmSans(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w500,
+                      fontStyle: FontStyle.normal),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -723,6 +902,150 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ── Wishlist PIN section ───────────────────────────────────────────────────
+
+  Widget _buildWishlistPinSection(ThemeColors tc) {
+    return Container(
+      decoration: BoxDecoration(
+        color: tc.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.borderColor),
+      ),
+      child: Column(
+        children: [
+          if (!_hasPin)
+            ListTile(
+              leading: Icon(Icons.password_rounded, color: tc.iconColor, size: 22),
+              title: Text(
+                'Set Wishlist PIN',
+                style: GoogleFonts.dmSans(
+                    fontWeight: FontWeight.w500,
+                    color: tc.textPrimary,
+                    fontStyle: FontStyle.normal),
+              ),
+              subtitle: Text(
+                'Protect hidden items with a 4-digit PIN',
+                style: GoogleFonts.dmSans(
+                    fontSize: 12,
+                    color: tc.textMuted,
+                    fontStyle: FontStyle.normal),
+              ),
+              trailing: Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: tc.textMuted),
+              onTap: () => _showPinDialog(tc, isSetting: true),
+            )
+          else ...[
+            ListTile(
+              leading: Icon(Icons.password_rounded, color: tc.iconColor, size: 22),
+              title: Text(
+                'Change PIN',
+                style: GoogleFonts.dmSans(
+                    fontWeight: FontWeight.w500,
+                    color: tc.textPrimary,
+                    fontStyle: FontStyle.normal),
+              ),
+              trailing: Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: tc.textMuted),
+              onTap: () => _showPinDialog(tc, isSetting: true, isChanging: true),
+            ),
+            Divider(height: 1, color: tc.borderColor, indent: 56),
+            ListTile(
+              leading: Icon(Icons.lock_open_rounded, color: Colors.orangeAccent, size: 22),
+              title: Text(
+                'Forgot PIN / Disable PIN',
+                style: GoogleFonts.dmSans(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.orangeAccent,
+                    fontStyle: FontStyle.normal),
+              ),
+              onTap: () async {
+                await _secureStorage.delete(key: 'wishlist_pin');
+                setState(() => _hasPin = false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Wishlist PIN has been disabled.')),
+                  );
+                }
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showPinDialog(ThemeColors tc, {bool isSetting = false, bool isChanging = false}) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        String enteredPin = '';
+        return AlertDialog(
+          backgroundColor: tc.cardColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: tc.borderColor),
+          ),
+          title: Text(
+            isChanging ? 'Enter New PIN' : 'Set Wishlist PIN',
+            style: GoogleFonts.playfairDisplay(
+              color: tc.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Enter a 4-digit PIN to secure your hidden wishlist items.',
+                style: GoogleFonts.dmSans(color: tc.textMuted, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              PinCodeTextField(
+                appContext: context,
+                length: 4,
+                obscureText: true,
+                animationType: AnimationType.scale,
+                keyboardType: TextInputType.number,
+                pinTheme: PinTheme(
+                  shape: PinCodeFieldShape.box,
+                  borderRadius: BorderRadius.circular(12),
+                  fieldHeight: 56,
+                  fieldWidth: 48,
+                  activeFillColor: tc.inputFillColor,
+                  inactiveFillColor: tc.inputFillColor,
+                  selectedFillColor: tc.inputFillColor,
+                  activeColor: tc.iconColor,
+                  inactiveColor: tc.borderColor,
+                  selectedColor: tc.iconColor,
+                ),
+                textStyle: GoogleFonts.dmMono(
+                  fontSize: 24,
+                  color: tc.textPrimary,
+                ),
+                enableActiveFill: true,
+                onChanged: (val) {
+                  enteredPin = val;
+                },
+                onCompleted: (val) async {
+                  await _secureStorage.write(key: 'wishlist_pin', value: val);
+                  setState(() => _hasPin = true);
+                  if (mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(isChanging ? 'Wishlist PIN changed successfully 🔒' : 'Wishlist PIN set successfully 🔒')),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -819,39 +1142,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 // The Originals Quiz Dialog
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _OriginalsQuizDialog extends StatefulWidget {
+class _OriginalsQuizDialog extends ConsumerStatefulWidget {
   final VoidCallback onUnlocked;
 
   const _OriginalsQuizDialog({required this.onUnlocked});
 
   @override
-  State<_OriginalsQuizDialog> createState() => _OriginalsQuizDialogState();
+  ConsumerState<_OriginalsQuizDialog> createState() => _OriginalsQuizDialogState();
 }
 
-class _OriginalsQuizDialogState extends State<_OriginalsQuizDialog> {
+class _OriginalsQuizDialogState extends ConsumerState<_OriginalsQuizDialog> {
   int _questionIndex = 0;
   String _answer = '';
   bool _wrong = false;
+  int _failures = 0;
 
   final _ctrl = TextEditingController();
 
   static const _questions = [
-    'Which day makes the year worth it?',
-    'What do you call her other personality?',
-    'If he had a debit card, what would his PIN be?',
+    'What day makes the year worth it?',
+    'What does he call her other personality?',
+    'If she had a debit card, what would her PIN be?',
+  ];
+
+  static const _hints = [
+    'Hint: Think about her birthday...',
+    'Hint: Her other personality...',
+    'Hint: Try 27...',
   ];
 
   bool _checkAnswer(String answer) {
-    switch (_questionIndex) {
-      case 0:
-        return answer.trim() == '27';
-      case 1:
-        return answer.trim().toLowerCase() == 'arsha';
-      case 2:
-        return answer.trim() == '2701';
-      default:
-        return false;
-    }
+    return ref.read(themeProvider.notifier).verifyAnswer(_questionIndex + 1, answer);
   }
 
   void _submit() {
@@ -860,6 +1181,7 @@ class _OriginalsQuizDialogState extends State<_OriginalsQuizDialog> {
       setState(() {
         _wrong = false;
         _answer = '';
+        _failures = 0;
         _ctrl.clear();
       });
       if (_questionIndex == 2) {
@@ -870,7 +1192,10 @@ class _OriginalsQuizDialogState extends State<_OriginalsQuizDialog> {
     } else {
       setState(() {
         _wrong = true;
-        _questionIndex = 0;
+        _failures++;
+        if (_questionIndex != 0) {
+          _questionIndex = 0; // Reset to Q1 unless already on Q1
+        }
         _answer = '';
         _ctrl.clear();
       });
@@ -938,7 +1263,7 @@ class _OriginalsQuizDialogState extends State<_OriginalsQuizDialog> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Q${_questionIndex + 1} / 3',
+              'Question ${_questionIndex + 1} of 3',
               style: GoogleFonts.dmMono(
                 fontSize: 11,
                 color: const Color(0xFFD4AF37).withValues(alpha: 0.6),
@@ -963,6 +1288,10 @@ class _OriginalsQuizDialogState extends State<_OriginalsQuizDialog> {
             // Answer input
             TextField(
               controller: _ctrl,
+              keyboardType: _questionIndex == 0 || _questionIndex == 2 ? TextInputType.number : TextInputType.text,
+              obscureText: _questionIndex == 2,
+              obscuringCharacter: '●',
+              maxLength: _questionIndex == 2 ? 4 : null,
               onChanged: (v) => setState(() => _answer = v),
               onSubmitted: (_) => _submit(),
               style: GoogleFonts.dmSans(
@@ -972,6 +1301,7 @@ class _OriginalsQuizDialogState extends State<_OriginalsQuizDialog> {
               ),
               decoration: InputDecoration(
                 hintText: 'Your answer',
+                counterText: '',
                 hintStyle: GoogleFonts.dmSans(
                   color: Colors.white.withValues(alpha: 0.3),
                   fontStyle: FontStyle.normal,
@@ -1002,13 +1332,26 @@ class _OriginalsQuizDialogState extends State<_OriginalsQuizDialog> {
             if (_wrong) ...[
               const SizedBox(height: 12),
               Text(
-                'Not quite... try again 💕',
+                _questionIndex == 0 ? 'Not quite... 💕' : (_questionIndex == 1 ? 'Hmm, that\'s not it 💕' : 'So close... 💕'),
                 style: GoogleFonts.dmSans(
                   color: AppColors.rose,
                   fontSize: 13,
                   fontStyle: FontStyle.normal,
                 ),
               ).animate().shake(duration: 400.ms),
+            ],
+            
+            // Hint Message after 3 failures
+            if (_failures >= 3) ...[
+              const SizedBox(height: 8),
+              Text(
+                _hints[_questionIndex],
+                style: GoogleFonts.dmSans(
+                  color: const Color(0xFFD4AF37),
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
+              ).animate().fadeIn(duration: 600.ms),
             ],
 
             const SizedBox(height: 20),
@@ -1042,7 +1385,7 @@ class _OriginalsQuizDialogState extends State<_OriginalsQuizDialog> {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        'Submit',
+                        _questionIndex == 2 ? 'Unlock 🔒' : 'Next →',
                         style: GoogleFonts.dmSans(
                           fontWeight: FontWeight.w600,
                           color: Colors.white,

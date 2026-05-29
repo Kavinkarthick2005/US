@@ -42,7 +42,7 @@ class OpenWhenNotifier extends AsyncNotifier<List<OpenWhenModel>> {
     final coupleState = ref.read(coupleProvider).valueOrNull;
     final myId     = _supabase.auth.currentUser?.id;
     final coupleId = coupleState?.coupleId ?? myId;
-    final partnerId = coupleState?.partnerId;
+    final partnerId = coupleState?.partner?.id;
 
     if (myId == null || coupleId == null || partnerId == null) return;
 
@@ -78,7 +78,7 @@ class OpenWhenNotifier extends AsyncNotifier<List<OpenWhenModel>> {
       final letter = state.valueOrNull?.firstWhere((l) => l.id == id);
       if (letter != null) {
         final coupleState = ref.read(coupleProvider).valueOrNull;
-        final partnerName = coupleState?.partner?.firstName ?? 'your partner';
+        final partnerName = coupleState?.partner?.name.split(' ').first ?? 'your partner';
 
         await _supabase.from('memories').insert({
           'id': Uuid().v4(),

@@ -1,39 +1,43 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 import '../../config/app_colors.dart';
-import '../../models/memory_model.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/couple_provider.dart';
 import '../../providers/recap_provider.dart';
-import '../../widgets/v2/space_header.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Slide gradient palettes — each slide gets a unique dark gradient
-// ─────────────────────────────────────────────────────────────────────────────
-const _slideGradients = [
-  [Color(0xFF1A0A0F), Color(0xFF3D1525)],
-  [Color(0xFF0D0620), Color(0xFF2A1A4A)],
-  [Color(0xFF0A1A10), Color(0xFF1A3D1E)],
-  [Color(0xFF1A100A), Color(0xFF3D2515)],
-  [Color(0xFF1A0A0F), Color(0xFF3D1525)],
-];
+import '../../widgets/couple_avatar.dart';
 
 class MonthlyRecapScreen extends ConsumerStatefulWidget {
-  const MonthlyRecapScreen({super.key});
+  final int month;
+  final int year;
+
+  const MonthlyRecapScreen({super.key, required this.month, required this.year});
 
   @override
-  ConsumerState<MonthlyRecapScreen> createState() =>
-      _MonthlyRecapScreenState();
+  ConsumerState<MonthlyRecapScreen> createState() => _MonthlyRecapScreenState();
 }
 
-class _MonthlyRecapScreenState extends ConsumerState<MonthlyRecapScreen>
-    with TickerProviderStateMixin {
-  final _pageController = PageController();
-  int _currentPage = 0;
+class _MonthlyRecapScreenState extends ConsumerState<MonthlyRecapScreen> {
+  final PageController _pageController = PageController();
+  final ScreenshotController _screenshotController = ScreenshotController();
+  bool _isTakingScreenshot = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      ref.read(recapProvider.notifier).generateRecap(widget.month, widget.year);
+    });
+  }
 
   @override
   void dispose() {
@@ -41,761 +45,423 @@ class _MonthlyRecapScreenState extends ConsumerState<MonthlyRecapScreen>
     super.dispose();
   }
 
-  void _nextPage() {
-    if (_currentPage < 4) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOutCubic,
-      );
+  Future<void> _shareScreenshot() async {
+    setState(() => _isTakingScreenshot = true);
+    try {
+      final image = await _screenshotController.capture(delay: const Duration(milliseconds: 10));
+      if (image != null) {
+        final directory = await getTemporaryDirectory();
+        final imagePath = await File('${directory.path}/our_month.png').create();
+        await imagePath.writeAsBytes(image);
+        await Share.shareXFiles([XFile(imagePath.path)], text: 'Our month together 💕');
+      }
+    } finally {
+      if (mounted) setState(() => _isTakingScreenshot = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final monthKey = DateTime(now.year, now.month, 1);
-    final recapAsync = ref.watch(monthlyRecapProvider(monthKey));
+    final recapAsync = ref.watch(recapProvider);
+    final coupleState = ref.watch(coupleProvider).valueOrNull;
+    final currentUser = ref.watch(currentUserProvider);
+    final partner = coupleState?.partner;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1A0A0F),
-      body: Column(
-        children: [
-          SpaceSubHeader(
-            title: 'Monthly Recap',
-            gradientColors: const [Color(0xFF1A0A0F), Color(0xFF3D1525)],
-            onBack: () => Navigator.of(context).pop(),
-          ),
-          Expanded(
-            child: recapAsync.when(
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: AppColors.rose),
-              ),
-              error: (e, _) => Center(
-                child: Text(
-                  'Could not load recap',
-                  style: GoogleFonts.dmSans(
-                    color: Colors.white70,
-                    fontStyle: FontStyle.normal,
-                  ),
+      backgroundColor: const Color(0xFF0F0509),
+      body: recapAsync.when(
+        loading: () => _buildLoadingState(),
+        error: (err, _) => _buildErrorState(err.toString()),
+        data: (data) {
+          if (data == null) return _buildLoadingState();
+          return Stack(
+            children: [
+              Screenshot(
+                controller: _screenshotController,
+                child: PageView(
+                  controller: _pageController,
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    _buildSlide1Opening(data, currentUser?.userMetadata?['avatar_url'], partner?.avatarUrl),
+                    _buildSlide2Mood(data),
+                    _buildSlide3Memories(data),
+                    _buildSlide4Finances(data),
+                    _buildSlide5Partner(data, partner?.name),
+                    _buildSlide6Moments(data),
+                    _buildSlide7Insight(data),
+                  ],
                 ),
               ),
-              data: (recap) => Stack(
-                children: [
-                  PageView(
-                    controller: _pageController,
-                    onPageChanged: (i) => setState(() => _currentPage = i),
-                    children: [
-                      _Slide1Cover(recap: recap),
-                      _Slide2DaysMemories(recap: recap),
-                      _Slide3Spending(recap: recap),
-                      _Slide4Moments(recap: recap),
-                      _Slide5Wrapup(recap: recap),
-                    ],
+              // Overlay controls (hidden during screenshot)
+              if (!_isTakingScreenshot) ...[
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 10,
+                  left: 10,
+                  child: IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    onPressed: () => context.pop(),
                   ),
-
-                  // Page indicator at bottom
-                  Positioned(
-                    bottom: 32,
-                    left: 0,
-                    right: 0,
-                    child: Column(
-                      children: [
-                        SmoothPageIndicator(
-                          controller: _pageController,
-                          count: 5,
-                          effect: ExpandingDotsEffect(
-                            activeDotColor: AppColors.rose,
-                            dotColor: Colors.white.withValues(alpha: 0.25),
-                            dotHeight: 6,
-                            dotWidth: 6,
-                            expansionFactor: 3,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        if (_currentPage < 4)
-                          GestureDetector(
-                            onTap: _nextPage,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 28, vertical: 12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(30),
-                                border: Border.all(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.2),
-                                ),
-                                color:
-                                    Colors.white.withValues(alpha: 0.07),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'Next',
-                                    style: GoogleFonts.dmSans(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                      fontStyle: FontStyle.normal,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Icon(
-                                    Icons.arrow_forward_rounded,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Slide 1 — Cover
-// ─────────────────────────────────────────────────────────────────────────────
-class _Slide1Cover extends StatelessWidget {
-  final MonthlyRecapData recap;
-  const _Slide1Cover({required this.recap});
-
-  @override
-  Widget build(BuildContext context) {
-    final gradient = _slideGradients[0];
-    return _SlideScaffold(
-      gradient: gradient,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('💕', style: TextStyle(fontSize: 64))
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(
-                duration: 1200.ms,
-                begin: const Offset(0.88, 0.88),
-                end: const Offset(1.12, 1.12),
-                curve: Curves.easeInOut,
-              ),
-          const SizedBox(height: 32),
-          Text(
-            recap.monthLabel,
-            style: GoogleFonts.playfairDisplay(
-              fontSize: 48,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontStyle: FontStyle.normal,
-              height: 1.1,
-            ),
-            textAlign: TextAlign.center,
-          )
-              .animate()
-              .fadeIn(duration: 600.ms, delay: 200.ms)
-              .slideY(begin: 0.3, end: 0, delay: 200.ms),
-          const SizedBox(height: 16),
-          Text(
-            'Your month in review',
-            style: GoogleFonts.dmSans(
-              fontSize: 18,
-              fontWeight: FontWeight.w400,
-              color: Colors.white.withValues(alpha: 0.7),
-              fontStyle: FontStyle.normal,
-            ),
-          )
-              .animate()
-              .fadeIn(duration: 600.ms, delay: 500.ms),
-          const SizedBox(height: 12),
-          Text(
-            '— with ${recap.partnerName} —',
-            style: GoogleFonts.playfairDisplay(
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
-              color: AppColors.rose.withValues(alpha: 0.85),
-              fontStyle: FontStyle.normal,
-            ),
-          )
-              .animate()
-              .fadeIn(duration: 600.ms, delay: 700.ms),
-          const SizedBox(height: 80),
-          Text(
-            'swipe to see your story',
-            style: GoogleFonts.dmSans(
-              fontSize: 12,
-              color: Colors.white.withValues(alpha: 0.35),
-              fontStyle: FontStyle.normal,
-            ),
-          )
-              .animate()
-              .fadeIn(duration: 800.ms, delay: 1200.ms),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Slide 2 — Days & Memories
-// ─────────────────────────────────────────────────────────────────────────────
-class _Slide2DaysMemories extends StatefulWidget {
-  final MonthlyRecapData recap;
-  const _Slide2DaysMemories({required this.recap});
-
-  @override
-  State<_Slide2DaysMemories> createState() => _Slide2DaysMemoriesState();
-}
-
-class _Slide2DaysMemoriesState extends State<_Slide2DaysMemories> {
-  @override
-  Widget build(BuildContext context) {
-    final gradient = _slideGradients[1];
-    return _SlideScaffold(
-      gradient: gradient,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'You two shared',
-            style: GoogleFonts.dmSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
-              color: Colors.white.withValues(alpha: 0.6),
-              fontStyle: FontStyle.normal,
-            ),
-          )
-              .animate()
-              .fadeIn(duration: 500.ms),
-          const SizedBox(height: 32),
-          _AnimatedCountStat(
-            value: widget.recap.memoriesAdded,
-            label: 'memories',
-            color: const Color(0xFF9B7AFF),
-            delay: 200.ms,
-          ),
-          const SizedBox(height: 24),
-          _AnimatedCountStat(
-            value: widget.recap.dropsPosted,
-            label: 'drops posted',
-            color: AppColors.rose,
-            delay: 500.ms,
-          ),
-          const SizedBox(height: 40),
-          Text(
-            'This month 📅',
-            style: GoogleFonts.dmSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.white.withValues(alpha: 0.55),
-              fontStyle: FontStyle.normal,
-            ),
-          )
-              .animate()
-              .fadeIn(duration: 500.ms, delay: 800.ms),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Slide 3 — Spending
-// ─────────────────────────────────────────────────────────────────────────────
-class _Slide3Spending extends StatefulWidget {
-  final MonthlyRecapData recap;
-  const _Slide3Spending({required this.recap});
-
-  @override
-  State<_Slide3Spending> createState() => _Slide3SpendingState();
-}
-
-class _Slide3SpendingState extends State<_Slide3Spending> {
-  @override
-  Widget build(BuildContext context) {
-    final gradient = _slideGradients[2];
-    final topCategory = widget.recap.expenseByCategory.isNotEmpty
-        ? (widget.recap.expenseByCategory.entries.toList()
-              ..sort((a, b) => b.value.compareTo(a.value)))
-            .first
-            .key
-        : null;
-
-    return _SlideScaffold(
-      gradient: gradient,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Together you spent',
-            style: GoogleFonts.dmSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
-              color: Colors.white.withValues(alpha: 0.6),
-              fontStyle: FontStyle.normal,
-            ),
-          ).animate().fadeIn(duration: 500.ms),
-          const SizedBox(height: 16),
-          _AnimatedRupeeCount(
-            value: widget.recap.totalExpenses,
-            delay: 200.ms,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'this month 💰',
-            style: GoogleFonts.dmSans(
-              fontSize: 16,
-              color: Colors.white.withValues(alpha: 0.55),
-              fontStyle: FontStyle.normal,
-            ),
-          ).animate().fadeIn(duration: 500.ms, delay: 600.ms),
-          const SizedBox(height: 32),
-          if (topCategory != null)
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.15)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('🏷️', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Top category: $topCategory',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white,
-                      fontStyle: FontStyle.normal,
-                    ),
-                  ),
-                ],
-              ),
-            ).animate().fadeIn(duration: 500.ms, delay: 900.ms).slideX(
-                  begin: -0.2,
-                  end: 0,
-                  delay: 900.ms,
                 ),
+                Positioned(
+                  bottom: MediaQuery.of(context).padding.bottom + 20,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: SmoothPageIndicator(
+                      controller: _pageController,
+                      count: 7,
+                      effect: const ExpandingDotsEffect(
+                        dotHeight: 6,
+                        dotWidth: 6,
+                        activeDotColor: AppColors.rose,
+                        dotColor: Colors.white24,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('💕', style: TextStyle(fontSize: 48)).animate(onPlay: (c) => c.repeat(reverse: true)).scale(duration: 1.seconds, begin: const Offset(0.9, 0.9), end: const Offset(1.1, 1.1)),
+          const SizedBox(height: 24),
+          Text(
+            'Generating Your Story...',
+            style: GoogleFonts.playfairDisplay(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold),
+          ).animate().fadeIn(duration: 1.seconds),
+          const SizedBox(height: 12),
+          Text(
+            'Reflecting on memories, drops, and shared moments...',
+            style: GoogleFonts.dmSans(fontSize: 14, color: Colors.white54),
+          ).animate().fadeIn(delay: 500.ms),
         ],
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Slide 4 — Moments
-// ─────────────────────────────────────────────────────────────────────────────
-class _Slide4Moments extends StatelessWidget {
-  final MonthlyRecapData recap;
-  const _Slide4Moments({required this.recap});
+  Widget _buildErrorState(String error) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text('Could not generate recap: $error', style: const TextStyle(color: Colors.white54)),
+      ),
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    final gradient = _slideGradients[3];
-    final categoryEmoji =
-        MemoryModel.categoryEmoji(recap.topMemoryCategory);
-    final catLabel = recap.topMemoryCategory[0].toUpperCase() +
-        recap.topMemoryCategory.substring(1);
+  // ── SLIDES ───────────────────────────────────────────────────────────────
 
-    return _SlideScaffold(
-      gradient: gradient,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            categoryEmoji,
-            style: const TextStyle(fontSize: 80),
-          )
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(
-                duration: 1400.ms,
-                begin: const Offset(0.9, 0.9),
-                end: const Offset(1.1, 1.1),
-                curve: Curves.easeInOut,
-              ),
-          const SizedBox(height: 24),
-          Text(
-            'Your top vibe was',
-            style: GoogleFonts.dmSans(
-              fontSize: 16,
-              color: Colors.white.withValues(alpha: 0.6),
-              fontStyle: FontStyle.normal,
-            ),
-          ).animate().fadeIn(duration: 500.ms, delay: 200.ms),
-          const SizedBox(height: 8),
-          Text(
-            catLabel,
-            style: GoogleFonts.playfairDisplay(
-              fontSize: 40,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontStyle: FontStyle.normal,
-            ),
-            textAlign: TextAlign.center,
-          )
-              .animate()
-              .fadeIn(duration: 600.ms, delay: 400.ms)
-              .slideY(begin: 0.2, end: 0, delay: 400.ms),
-          const SizedBox(height: 48),
-          Row(
+  Widget _buildSlide1Opening(RecapData data, String? myAvatar, String? partnerAvatar) {
+    final monthName = DateFormat('MMMM yyyy').format(DateTime(data.year, data.month));
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF3D1525), Color(0xFF0F0509)],
+        ),
+      ),
+      child: SafeArea(
+        child: Center(
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _SmallStat(
-                emoji: '🔔',
-                value: recap.remindersSet,
-                label: 'reminders',
-                delay: 700.ms,
-              ),
-              const SizedBox(width: 24),
-              _SmallStat(
-                emoji: '📝',
-                value: recap.notesWritten,
-                label: 'notes',
-                delay: 900.ms,
-              ),
+              CoupleAvatar(myAvatarUrl: myAvatar, partnerAvatarUrl: partnerAvatar, size: 100)
+                  .animate()
+                  .fadeIn(duration: 800.ms)
+                  .scale(begin: const Offset(0.8, 0.8), curve: Curves.easeOutBack),
+              const SizedBox(height: 40),
+              Text(
+                monthName.toUpperCase(),
+                style: GoogleFonts.dmMono(fontSize: 16, letterSpacing: 6, color: AppColors.rose, fontWeight: FontWeight.bold),
+              ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.5),
+              const SizedBox(height: 16),
+              Text(
+                'Your month,\ntogether 💑',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.playfairDisplay(fontSize: 42, color: Colors.white, fontWeight: FontWeight.bold, height: 1.2),
+              ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.3),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Slide 5 — Wrap-up
-// ─────────────────────────────────────────────────────────────────────────────
-class _Slide5Wrapup extends StatelessWidget {
-  final MonthlyRecapData recap;
-  const _Slide5Wrapup({required this.recap});
-
-  @override
-  Widget build(BuildContext context) {
-    final gradient = _slideGradients[4];
-    final shareText =
-        '${recap.monthLabel} in review:\n'
-        '📸 ${recap.memoriesAdded} memories\n'
-        '💧 ${recap.dropsPosted} drops\n'
-        '💰 ₹${recap.totalExpenses.toStringAsFixed(0)} spent\n'
-        'Made with love — with ${recap.partnerName} 💕';
-
-    return _SlideScaffold(
-      gradient: gradient,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('❤️', style: TextStyle(fontSize: 80))
-              .animate(onPlay: (c) => c.repeat(reverse: true))
-              .scale(
-                duration: 1000.ms,
-                begin: const Offset(0.88, 0.88),
-                end: const Offset(1.12, 1.12),
-                curve: Curves.easeInOut,
-              ),
-          const SizedBox(height: 32),
-          Text(
-            'Keep making memories',
-            style: GoogleFonts.playfairDisplay(
-              fontSize: 32,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontStyle: FontStyle.normal,
-            ),
-            textAlign: TextAlign.center,
-          )
-              .animate()
-              .fadeIn(duration: 600.ms, delay: 200.ms)
-              .slideY(begin: 0.2, end: 0, delay: 200.ms),
-          const SizedBox(height: 12),
-          Text(
-            'with ${recap.partnerName} 💕',
-            style: GoogleFonts.playfairDisplay(
-              fontSize: 20,
-              fontWeight: FontWeight.w400,
-              color: AppColors.rose.withValues(alpha: 0.85),
-              fontStyle: FontStyle.normal,
-            ),
-          ).animate().fadeIn(duration: 500.ms, delay: 500.ms),
-          const SizedBox(height: 64),
-          GestureDetector(
-            onTap: () => Share.share(shareText),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.rose, AppColors.mauve],
-                ),
-                borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.rose.withValues(alpha: 0.4),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.share_rounded,
-                      color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Share Our Month',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      fontStyle: FontStyle.normal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-              .animate()
-              .fadeIn(duration: 600.ms, delay: 800.ms)
-              .slideY(begin: 0.3, end: 0, delay: 800.ms),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared slide scaffold
-// ─────────────────────────────────────────────────────────────────────────────
-class _SlideScaffold extends StatelessWidget {
-  final List<Color> gradient;
-  final Widget child;
-
-  const _SlideScaffold({required this.gradient, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildSlide2Mood(RecapData data) {
     return Container(
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
+      color: const Color(0xFF1A0A0F),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'THIS MONTH WAS A',
+              style: GoogleFonts.dmSans(fontSize: 14, letterSpacing: 4, color: Colors.white54, fontWeight: FontWeight.bold),
+            ).animate().fadeIn(),
+            const SizedBox(height: 24),
+            Text(
+              data.moodLabel,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.playfairDisplay(fontSize: 56, color: AppColors.rose, fontWeight: FontWeight.bold, height: 1.1),
+            ).animate().fadeIn(delay: 300.ms).scale(begin: const Offset(0.8, 0.8)),
+            const SizedBox(height: 60),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.calendar_today_rounded, color: Colors.white38, size: 20),
+                const SizedBox(width: 12),
+                Text(
+                  '${data.daysInMonth} days shared together',
+                  style: GoogleFonts.dmSans(fontSize: 18, color: Colors.white70),
+                ),
+              ],
+            ).animate().fadeIn(delay: 600.ms),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlide3Memories(RecapData data) {
+    return Container(
+      color: const Color(0xFF2C131C),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You captured the magic.',
+                style: GoogleFonts.playfairDisplay(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold, height: 1.2),
+              ).animate().fadeIn().slideX(begin: -0.1),
+              const SizedBox(height: 48),
+              _buildStatRow('🧠', data.memoriesCount, 'memories saved', delay: 300),
+              const SizedBox(height: 32),
+              _buildStatRow('📸', data.dropsCount, 'moments shared', delay: 600),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String emoji, int count, String label, {required int delay}) {
+    return Row(
+      children: [
+        Text(emoji, style: const TextStyle(fontSize: 48)).animate().fadeIn(delay: delay.ms).scale(),
+        const SizedBox(width: 20),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              count.toString(),
+              style: GoogleFonts.dmMono(fontSize: 42, color: AppColors.rose, fontWeight: FontWeight.bold),
+            ).animate().fadeIn(delay: (delay + 100).ms),
+            Text(
+              label,
+              style: GoogleFonts.dmSans(fontSize: 18, color: Colors.white70),
+            ).animate().fadeIn(delay: (delay + 200).ms),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSlide4Finances(RecapData data) {
+    return Container(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: gradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: [Color(0xFF2A1B0B), Color(0xFF0F0509)],
         ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 24, 32, 120),
-        child: child,
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Animated count-up stat
-// ─────────────────────────────────────────────────────────────────────────────
-class _AnimatedCountStat extends StatefulWidget {
-  final int value;
-  final String label;
-  final Color color;
-  final Duration delay;
-
-  const _AnimatedCountStat({
-    required this.value,
-    required this.label,
-    required this.color,
-    required this.delay,
-  });
-
-  @override
-  State<_AnimatedCountStat> createState() => _AnimatedCountStatState();
-}
-
-class _AnimatedCountStatState extends State<_AnimatedCountStat>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    _anim = Tween<double>(begin: 0, end: widget.value.toDouble())
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    Future.delayed(widget.delay, () {
-      if (mounted) _ctrl.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            _anim.value.toInt().toString(),
-            style: GoogleFonts.dmMono(
-              fontSize: 72,
-              fontWeight: FontWeight.w700,
-              color: widget.color,
-              fontStyle: FontStyle.normal,
-              height: 1.0,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              widget.label,
-              style: GoogleFonts.dmSans(
-                fontSize: 20,
-                fontWeight: FontWeight.w400,
-                color: Colors.white.withValues(alpha: 0.7),
-                fontStyle: FontStyle.normal,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'INVESTED IN US',
+              style: GoogleFonts.dmSans(fontSize: 14, letterSpacing: 4, color: Colors.white54, fontWeight: FontWeight.bold),
+            ).animate().fadeIn(),
+            const SizedBox(height: 24),
+            Text(
+              '₹${data.totalExpenses.toInt()}',
+              style: GoogleFonts.playfairDisplay(fontSize: 64, color: const Color(0xFFFFD54F), fontWeight: FontWeight.bold),
+            ).animate().fadeIn(delay: 300.ms).scale(),
+            const SizedBox(height: 16),
+            Text(
+              'Spent together this month 💸',
+              style: GoogleFonts.dmSans(fontSize: 18, color: Colors.white70),
+            ).animate().fadeIn(delay: 500.ms),
+            const SizedBox(height: 48),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(20)),
+              child: Text(
+                'Mostly on ${data.topCategory}',
+                style: GoogleFonts.dmSans(fontSize: 16, color: Colors.white),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Animated rupee count-up
-// ─────────────────────────────────────────────────────────────────────────────
-class _AnimatedRupeeCount extends StatefulWidget {
-  final double value;
-  final Duration delay;
-
-  const _AnimatedRupeeCount({required this.value, required this.delay});
-
-  @override
-  State<_AnimatedRupeeCount> createState() => _AnimatedRupeeCountState();
-}
-
-class _AnimatedRupeeCountState extends State<_AnimatedRupeeCount>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    _anim = Tween<double>(begin: 0, end: widget.value)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    Future.delayed(widget.delay, () {
-      if (mounted) _ctrl.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => Text(
-        '₹${NumberFormat('#,##,###').format(_anim.value.toInt())}',
-        style: GoogleFonts.dmMono(
-          fontSize: 58,
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFF4ADE80),
-          fontStyle: FontStyle.normal,
-          height: 1.1,
+            ).animate().fadeIn(delay: 700.ms).slideY(begin: 0.5),
+          ],
         ),
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Small stat pill for Slide 4
-// ─────────────────────────────────────────────────────────────────────────────
-class _SmallStat extends StatelessWidget {
-  final String emoji;
-  final int value;
-  final String label;
-  final Duration delay;
-
-  const _SmallStat({
-    required this.emoji,
-    required this.value,
-    required this.label,
-    required this.delay,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildSlide5Partner(RecapData data, String? partnerName) {
+    final pName = partnerName?.split(' ').first ?? 'Partner';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      color: const Color(0xFF1E0D14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "$pName's Highlights",
+              style: GoogleFonts.playfairDisplay(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold),
+            ).animate().fadeIn().slideX(begin: -0.1),
+            const SizedBox(height: 40),
+            _buildHighlightItem('🌸', 'Cared for during period', '${data.periodDays} days', 300),
+            const SizedBox(height: 24),
+            _buildHighlightItem('🍲', 'Favorite shared food', data.topFood, 500),
+          ],
+        ),
       ),
-      child: Column(
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
-          const SizedBox(height: 6),
-          Text(
-            '$value',
-            style: GoogleFonts.dmMono(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontStyle: FontStyle.normal,
-            ),
+    );
+  }
+
+  Widget _buildHighlightItem(String emoji, String title, String subtitle, int delay) {
+    return Row(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(color: Colors.white10, shape: BoxShape.circle),
+          child: Center(child: Text(emoji, style: const TextStyle(fontSize: 28))),
+        ).animate().fadeIn(delay: delay.ms).scale(),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.dmSans(fontSize: 14, color: Colors.white54),
+              ).animate().fadeIn(delay: (delay + 100).ms),
+              Text(
+                subtitle,
+                style: GoogleFonts.dmSans(fontSize: 20, color: Colors.white, fontWeight: FontWeight.w500),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ).animate().fadeIn(delay: (delay + 200).ms),
+            ],
           ),
-          Text(
-            label,
-            style: GoogleFonts.dmSans(
-              fontSize: 12,
-              color: Colors.white.withValues(alpha: 0.55),
-              fontStyle: FontStyle.normal,
-            ),
-          ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSlide6Moments(RecapData data) {
+    return Container(
+      color: const Color(0xFF0F0509),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your Story',
+              style: GoogleFonts.dmSans(fontSize: 14, letterSpacing: 4, color: AppColors.rose, fontWeight: FontWeight.bold),
+            ).animate().fadeIn(),
+            const SizedBox(height: 16),
+            Text(
+              'Top Moments 💕',
+              style: GoogleFonts.playfairDisplay(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold),
+            ).animate().fadeIn(delay: 200.ms),
+            const SizedBox(height: 48),
+            ...data.topMoments.asMap().entries.map((e) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${e.key + 1}.', style: GoogleFonts.dmMono(fontSize: 24, color: AppColors.rose, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        e.value,
+                        style: GoogleFonts.dmSans(fontSize: 20, color: Colors.white70, height: 1.3),
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(delay: (400 + (e.key * 200)).ms).slideX(begin: 0.1);
+            }),
+          ],
+        ),
       ),
-    )
-        .animate()
-        .fadeIn(duration: 500.ms, delay: delay)
-        .scale(
-          begin: const Offset(0.8, 0.8),
-          end: const Offset(1, 1),
-          delay: delay,
-          curve: Curves.elasticOut,
-        );
+    );
+  }
+
+  Widget _buildSlide7Insight(RecapData data) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF3D1525), Color(0xFF0F0509)],
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('💌', style: TextStyle(fontSize: 48)).animate().fadeIn().scale(),
+              const SizedBox(height: 32),
+              Text(
+                '"${data.insightText}"',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.playfairDisplay(fontSize: 28, color: Colors.white, fontStyle: FontStyle.italic, height: 1.4),
+              ).animate().fadeIn(delay: 400.ms),
+              const SizedBox(height: 24),
+              Text(
+                '— Your Us AI 💕',
+                style: GoogleFonts.dmSans(fontSize: 16, color: AppColors.rose, fontWeight: FontWeight.bold),
+              ).animate().fadeIn(delay: 800.ms),
+              const SizedBox(height: 64),
+              if (!_isTakingScreenshot)
+                ElevatedButton.icon(
+                  onPressed: _shareScreenshot,
+                  icon: const Icon(Icons.favorite_rounded),
+                  label: Text('Save Our Month 💕', style: GoogleFonts.dmSans(fontWeight: FontWeight.bold, fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF3D1525),
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  ),
+                ).animate().fadeIn(delay: 1200.ms).slideY(begin: 0.5),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

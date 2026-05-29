@@ -181,10 +181,10 @@ class CoupleNotifier extends AsyncNotifier<CoupleState> {
       final currentPartnerId = state.value?.currentUser?.partnerId;
 
       if (myId != null) {
-        await _supabase.from('profiles').update({'partner_id': null}).eq('id', myId);
+        await _supabase.from('profiles').update({'partner_id': null, 'couple_id': null}).eq('id', myId);
       }
       if (currentPartnerId != null) {
-        await _supabase.from('profiles').update({'partner_id': null}).eq('id', currentPartnerId);
+        await _supabase.from('profiles').update({'partner_id': null, 'couple_id': null}).eq('id', currentPartnerId);
       }
       
       ref.invalidateSelf();

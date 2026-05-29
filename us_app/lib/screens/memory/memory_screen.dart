@@ -13,6 +13,8 @@ import '../../providers/category_provider.dart';
 import '../../utils/pronoun_helper.dart';
 import '../../widgets/couple_avatar.dart';
 import '../../widgets/shimmer_card.dart';
+import '../../widgets/empty_state.dart';
+import 'package:flutter/services.dart';
 
 class MemoryScreen extends ConsumerStatefulWidget {
   const MemoryScreen({super.key});
@@ -82,6 +84,7 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen>
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.rose),
             onPressed: () {
               ref.read(memoryProvider.notifier).deleteMemory(id);
+              HapticFeedback.lightImpact();
               Navigator.pop(ctx);
             },
             child: Text('Delete',
@@ -340,25 +343,12 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen>
               child: memoryState.when(
                 data: (_) {
                   if (filteredMemories.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SlideTransition(
-                            position: _floatAnimation,
-                            child: const Text('🧠',
-                                style: TextStyle(fontSize: 64)),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Start saving what makes ${PronounHelper.object(pronoun).toLowerCase()}, ${PronounHelper.object(pronoun).toLowerCase()}. 💕',
-                            style: GoogleFonts.dmSans(
-                              fontSize: 15,
-                              color: tc.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
+                    return EmptyState(
+                      emoji: '🧠',
+                      title: 'Nothing saved yet',
+                      subtitle: 'Start saving what makes ${PronounHelper.object(pronoun).toLowerCase()}, ${PronounHelper.object(pronoun).toLowerCase()}. 💕',
+                      textColor: tc.textPrimary,
+                      subtitleColor: tc.textMuted,
                     );
                   }
 
@@ -476,9 +466,13 @@ class _MemoryScreenState extends ConsumerState<MemoryScreen>
                 },
                 loading: () => const Padding(
                   padding: EdgeInsets.all(20),
-                  child: ShimmerList(count: 4),
+                  child: ShimmerList(itemCount: 4, itemHeight: 120),
                 ),
-                error: (e, st) => Center(child: Text('Error: $e')),
+                error: (e, st) => GenericErrorState(
+                  message: 'Failed to load memories.',
+                  onRetry: () => ref.invalidate(memoryProvider),
+                  textColor: tc.textPrimary,
+                ),
               ),
             ),
           ],

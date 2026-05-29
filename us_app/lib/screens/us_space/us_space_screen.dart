@@ -27,6 +27,20 @@ import '../../providers/wishlist_provider.dart';
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/couple_avatar.dart';
 import '../../widgets/v2/glass_container.dart';
+import '../../widgets/v2/otw_card.dart';
+import '../../providers/location_provider.dart';
+
+final dashboardStatsProvider = FutureProvider.autoDispose((ref) async {
+  final couple = ref.watch(coupleProvider).valueOrNull;
+  if (couple == null || couple.coupleId == null) return {'memories': 0};
+  
+  final memories = await Supabase.instance.client
+      .from('memories')
+      .select('id')
+      .eq('couple_id', couple.coupleId!);
+      
+  return {'memories': memories.length};
+});
 
 class UsSpaceScreen extends ConsumerStatefulWidget {
   const UsSpaceScreen({super.key});
@@ -201,6 +215,10 @@ class _UsSpaceScreenState extends ConsumerState<UsSpaceScreen>
                     delegate: SliverChildListDelegate([
                       // ── RELATIONSHIP STAT BANNER ─────────────────────────────────
                       _buildRelationshipStatBanner(tc),
+                      const SizedBox(height: 16),
+                      
+                      // ── THIS MONTH RECAP BUTTON ────────────────────────────────
+                      _buildRecapButton(),
                       const SizedBox(height: 24),
 
                       // ── TODAY SECTION ───────────────────────────────────────────
@@ -209,6 +227,10 @@ class _UsSpaceScreenState extends ConsumerState<UsSpaceScreen>
 
                       // ── QUICK ACTIONS ROW ───────────────────────────────────────
                       _buildQuickActionsRow(tc),
+                      const SizedBox(height: 28),
+
+                      // ── ON THE WAY (OTW) LOCATION ────────────────────────────────
+                      _buildOtwSection(),
                       const SizedBox(height: 28),
 
                       // ── LATEST SCRAPBOOK DROP ────────────────────────────────────
@@ -233,6 +255,42 @@ class _UsSpaceScreenState extends ConsumerState<UsSpaceScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Monthly Recap Button ───────────────────────────────────────────────────
+  Widget _buildRecapButton() {
+    return GestureDetector(
+      onTap: () {
+        final now = DateTime.now();
+        context.go('/us-space/recap?month=${now.month}&year=${now.year}');
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+        decoration: BoxDecoration(
+          color: AppColors.rose.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.rose.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('📊', style: TextStyle(fontSize: 20)),
+            const SizedBox(width: 12),
+            Text(
+              'This Month',
+              style: GoogleFonts.dmSans(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.rose,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.rose, size: 14),
+          ],
+        ),
       ),
     );
   }
@@ -636,6 +694,115 @@ class _UsSpaceScreenState extends ConsumerState<UsSpaceScreen>
           ),
         );
       }).toList(),
+    );
+  }
+
+  // ── OTW Location Section ───────────────────────────────────────────────────
+  Widget _buildOtwSection() {
+    final locationState = ref.watch(locationProvider);
+
+    // If there's an active share (mine or partner's), just show the card
+    if (locationState.isSharing || locationState.partnerSharing || locationState.partnerArrived) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 4),
+            child: Text(
+              'LIVE LOCATION',
+              style: GoogleFonts.dmSans(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+                color: Colors.white54,
+                fontStyle: FontStyle.normal,
+              ),
+            ),
+          ),
+          OtwCard(isMyShare: locationState.isSharing),
+        ],
+      );
+    }
+
+    // Presets view
+    final presets = [
+      {'emoji': '🚗', 'msg': 'Coming to pick you up', 'type': 'coming_to_you'},
+      {'emoji': '🏠', 'msg': 'Heading home', 'type': 'heading_home'},
+      {'emoji': '🎓', 'msg': 'Leaving college', 'type': 'leaving_college'},
+      {'emoji': '🍽️', 'msg': 'On my way to dinner', 'type': 'dinner'},
+      {'emoji': '✈️', 'msg': 'Traveling', 'type': 'travel'},
+      {'emoji': '📍', 'msg': 'Share my live location', 'type': 'custom'},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Text(
+            'ON THE WAY',
+            style: GoogleFonts.dmSans(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+              color: Colors.white54,
+              fontStyle: FontStyle.normal,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 95,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: presets.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final p = presets[index];
+              return GestureDetector(
+                onTap: () {
+                  // Fire off a 2 hour share immediately
+                  ref.read(locationProvider.notifier).startSharing(
+                        durationMinutes: 120,
+                        message: p['msg']!,
+                        shareType: p['type']!,
+                        // Destination lat/lng would be selected via a secondary bottom sheet,
+                        // but for MVP quick tap we'll just share without auto-stop
+                      );
+                },
+                child: GlassContainer(
+                  width: 110,
+                  padding: const EdgeInsets.all(12),
+                  blur: 15,
+                  tint: Colors.white,
+                  tintOpacity: 0.05,
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(p['emoji']!, style: const TextStyle(fontSize: 24)),
+                      const SizedBox(height: 8),
+                      Text(
+                        p['msg']!,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.dmSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white70,
+                          height: 1.2,
+                          fontStyle: FontStyle.normal,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

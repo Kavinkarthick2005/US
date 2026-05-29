@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/env.dart';
+import '../models/wishlist_model.dart';
+import 'couple_provider.dart';
 import 'memory_provider.dart';
 import 'wishlist_provider.dart';
 
@@ -121,14 +125,27 @@ class GiftNotifier extends StateNotifier<GiftState> {
   }
 
   void saveToWishlist(GiftProduct product) {
-    ref.read(wishlistProvider.notifier).addWishlistItem(
+    final coupleState = ref.read(coupleProvider).valueOrNull;
+    final myId = Supabase.instance.client.auth.currentUser?.id;
+    if (myId == null) return;
+    final coupleId = coupleState?.coupleId ?? myId;
+
+    final item = WishlistModel(
+      id: const Uuid().v4(),
+      coupleId: coupleId,
+      addedBy: myId,
       title: product.title,
+      type: WishlistModel.typeBuy,
       price: double.tryParse(product.price.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0,
       link: product.link,
       visibility: 'theirs',
       emotionalTag: 'surprise',
       imageUrl: product.thumbnail,
+      isDone: false,
+      createdAt: DateTime.now(),
     );
+
+    ref.read(wishlistProvider.notifier).addItem(item);
   }
 }
 
