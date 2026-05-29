@@ -2,49 +2,127 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
-/// Centralised typography tokens for the Us app.
-class AppText {
-  AppText._();
+/// V2 typography system — Playfair Display (headings), DM Sans (body), DM Mono (numbers).
+/// No italic variants anywhere.
+class AppTextStyles {
+  AppTextStyles._();
 
-  /// Playfair Display 28sp italic — hero headlines
-  static TextStyle get display => GoogleFonts.playfairDisplay(
-        fontSize: 28,
-        
+  // ── Display / Hero ────────────────────────────────────────────────────────
+  static TextStyle display({Color? color, double? fontSize}) =>
+      GoogleFonts.playfairDisplay(
+        fontSize: fontSize ?? 32,
         fontWeight: FontWeight.w700,
-        color: AppColors.deep,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
       );
 
-  /// Playfair Display 22sp bold — section headings
-  static TextStyle get heading => GoogleFonts.playfairDisplay(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-        color: AppColors.deep,
+  static TextStyle headline({Color? color, double? fontSize}) =>
+      GoogleFonts.playfairDisplay(
+        fontSize: fontSize ?? 24,
+        fontWeight: FontWeight.w700,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
       );
 
-  /// DM Sans 18sp w500 — card / list titles
-  static TextStyle get title => GoogleFonts.dmSans(
-        fontSize: 18,
+  static TextStyle headlineMedium({Color? color, double? fontSize}) =>
+      GoogleFonts.playfairDisplay(
+        fontSize: fontSize ?? 20,
+        fontWeight: FontWeight.w600,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
+      );
+
+  // ── Body ─────────────────────────────────────────────────────────────────
+  static TextStyle titleLarge({Color? color, double? fontSize}) =>
+      GoogleFonts.dmSans(
+        fontSize: fontSize ?? 18,
+        fontWeight: FontWeight.w600,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
+      );
+
+  static TextStyle titleMedium({Color? color, double? fontSize}) =>
+      GoogleFonts.dmSans(
+        fontSize: fontSize ?? 16,
         fontWeight: FontWeight.w500,
-        color: AppColors.deep,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
       );
 
-  /// DM Sans 14sp w400 — body copy
-  static TextStyle get body => GoogleFonts.dmSans(
-        fontSize: 14,
+  static TextStyle body({Color? color, double? fontSize}) =>
+      GoogleFonts.dmSans(
+        fontSize: fontSize ?? 14,
         fontWeight: FontWeight.w400,
-        color: AppColors.mid,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
       );
 
-  /// DM Sans 12sp w400 — captions, timestamps
-  static TextStyle get caption => GoogleFonts.dmSans(
-        fontSize: 12,
+  static TextStyle bodyMedium({Color? color, double? fontSize}) =>
+      GoogleFonts.dmSans(
+        fontSize: fontSize ?? 14,
+        fontWeight: FontWeight.w500,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
+      );
+
+  static TextStyle caption({Color? color, double? fontSize}) =>
+      GoogleFonts.dmSans(
+        fontSize: fontSize ?? 12,
         fontWeight: FontWeight.w400,
-        color: AppColors.muted,
+        color: color ?? AppColors.muted,
+        fontStyle: FontStyle.normal,
       );
 
-  /// DM Mono 12sp — code / mono snippets
-  static TextStyle get mono => GoogleFonts.dmMono(
-        fontSize: 12,
-        color: AppColors.muted,
+  static TextStyle captionMedium({Color? color, double? fontSize}) =>
+      GoogleFonts.dmSans(
+        fontSize: fontSize ?? 12,
+        fontWeight: FontWeight.w500,
+        color: color ?? AppColors.muted,
+        fontStyle: FontStyle.normal,
+      );
+
+  static TextStyle label({Color? color, double? fontSize}) =>
+      GoogleFonts.dmSans(
+        fontSize: fontSize ?? 11,
+        fontWeight: FontWeight.w600,
+        color: color ?? AppColors.muted,
+        fontStyle: FontStyle.normal,
+        letterSpacing: 0.8,
+      );
+
+  // ── Mono (numbers, codes) ─────────────────────────────────────────────────
+  static TextStyle mono({Color? color, double? fontSize}) =>
+      GoogleFonts.dmMono(
+        fontSize: fontSize ?? 14,
+        fontWeight: FontWeight.w500,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
+      );
+
+  static TextStyle monoLarge({Color? color, double? fontSize}) =>
+      GoogleFonts.dmMono(
+        fontSize: fontSize ?? 28,
+        fontWeight: FontWeight.w600,
+        color: color ?? AppColors.deep,
+        fontStyle: FontStyle.normal,
+      );
+
+  // ── Button text ───────────────────────────────────────────────────────────
+  static TextStyle button({Color? color, double? fontSize}) =>
+      GoogleFonts.dmSans(
+        fontSize: fontSize ?? 15,
+        fontWeight: FontWeight.w600,
+        color: color ?? Colors.white,
+        fontStyle: FontStyle.normal,
+        letterSpacing: 0.3,
+      );
+
+  // ── AppBar title ──────────────────────────────────────────────────────────
+  static TextStyle appBar({Color? color}) =>
+      GoogleFonts.playfairDisplay(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: color ?? AppColors.rose,
+        fontStyle: FontStyle.normal,
       );
 }

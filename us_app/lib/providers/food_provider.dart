@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -6,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../config/env.dart';
+import '../core/groq_client.dart';
 import '../models/food_log_model.dart';
 import 'couple_provider.dart';
 
@@ -121,6 +123,30 @@ class FoodNotifier extends AsyncNotifier<List<FoodLogModel>> {
         l.loggedAt.year  == today.year &&
         l.loggedAt.month == today.month &&
         l.loggedAt.day   == today.day).toList();
+  }
+
+  /// AI-based calorie estimation using Groq API
+  Future<Map<String, dynamic>?> estimateCalories(String description) async {
+    try {
+      final systemPrompt = "Estimate calories for this meal. Return ONLY a valid JSON object matching this schema: {\"min_calories\": int, \"max_calories\": int, \"confidence\": string}. Return ONLY valid raw JSON. No markdown. No explanation. No backticks.";
+      final userPrompt = "Meal description: $description";
+      
+      final response = await GroqClient.prompt(systemPrompt, userPrompt, maxTokens: 150);
+      
+      // Clean up any markdown code block wrappers
+      String cleaned = response.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replaceFirst(RegExp(r'^```(json)?'), '');
+      }
+      if (cleaned.endsWith('```')) {
+        cleaned = cleaned.substring(0, cleaned.length - 3);
+      }
+      cleaned = cleaned.trim();
+      
+      return jsonDecode(cleaned) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
   }
 }
 

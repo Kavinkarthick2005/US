@@ -22,7 +22,8 @@ class FoodLogScreen extends ConsumerStatefulWidget {
 }
 
 class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
-  bool _viewingPartner = false;
+  // Always log and view "Me" in He Space
+  final bool _viewingPartner = false;
 
   @override
   Widget build(BuildContext context) {
@@ -34,13 +35,9 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
     final foodAsync = ref.watch(foodProvider);
     final notifier  = ref.read(foodProvider.notifier);
 
-    final viewedId = _viewingPartner
-        ? coupleState?.partner?.id
-        : coupleState?.currentUser?.id;
+    final viewedId = coupleState?.currentUser?.id;
 
-    final todayLogs = _viewingPartner
-        ? notifier.todayPartnerLogs
-        : notifier.todayMyLogs;
+    final todayLogs = notifier.todayMyLogs;
 
     final allLogs = foodAsync.valueOrNull ?? [];
     final viewedLogs = viewedId == null
@@ -58,26 +55,21 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
           onPressed: () => context.pop(),
         ),
         title: Text(
-          'Food Log 🍱',
+          'My Food Log 🍱',
           style: GoogleFonts.playfairDisplay(
             fontSize: 20,
             fontWeight: FontWeight.w700,
             color: tc.textPrimary,
+            fontStyle: FontStyle.normal,
           ),
         ),
-        actions: [
-          _ViewToggle(
-            viewingPartner: _viewingPartner,
-            myLabel:       myName,
-            partnerLabel:  partnerName,
-            onChanged:     (v) => setState(() => _viewingPartner = v),
-            tc:            tc,
-          ),
-          const SizedBox(width: 8),
+        actions: const [
+          // Locked to "Me" only in He Space
+          SizedBox(width: 8),
         ],
       ),
       body: foodAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFE8607A))),
         error: (_, __) =>
             Center(child: Text('Failed to load food log', style: TextStyle(color: tc.textPrimary))),
         data: (_) => ListView(
@@ -88,7 +80,7 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
               todayLogs: todayLogs,
               tc:        tc,
               onTapMeal: (meal) =>
-                  context.push('/food/add?meal=$meal'),
+                  context.push('/he-space/food/add?meal=$meal'),
             ),
             const SizedBox(height: 20),
 
@@ -105,7 +97,7 @@ class _FoodLogScreenState extends ConsumerState<FoodLogScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/food/add'),
+        onPressed: () => context.push('/he-space/food/add'),
         backgroundColor: tc.iconColor,
         child: const Icon(Icons.add, color: Colors.white),
       ),

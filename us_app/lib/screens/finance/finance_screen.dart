@@ -57,11 +57,9 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
 
   void _onBottomNavTapped(int index) {
     switch (index) {
-      case 0: context.go('/home'); break;
-      case 1: context.go('/memory'); break;
-      case 2: context.go('/finance'); break;
-      case 3: context.go('/planner'); break;
-      case 4: context.go('/ai-chat'); break;
+      case 0: context.go('/he-space'); break;
+      case 1: context.go('/us-space'); break;
+      case 2: context.go('/she-space'); break;
     }
   }
 
@@ -73,10 +71,14 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
 
     return Scaffold(
       backgroundColor: tc.backgroundColor,
-      bottomNavigationBar: BottomNav(currentIndex: 2, onTap: _onBottomNavTapped),
+      bottomNavigationBar: BottomNav(currentIndex: 1, onTap: _onBottomNavTapped),
       appBar: AppBar(
         backgroundColor: tc.backgroundColor,
         elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: tc.textPrimary, size: 20),
+          onPressed: () => context.go('/us-space'),
+        ),
         title: Text(
           'Finances 💸',
           style: GoogleFonts.playfairDisplay(
@@ -86,6 +88,13 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.favorite_border_rounded, color: tc.iconColor),
+            tooltip: 'Wishlist',
+            onPressed: () => context.go('/us-space/wishlist'),
+          ),
+        ],
       ),
       body: Column(
         children: [

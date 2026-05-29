@@ -1,7 +1,7 @@
 name: us_app
-description: Our couple companion app
+description: Our couple companion app — V2
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -20,14 +20,20 @@ dependencies:
   # Navigation
   go_router: ^14.2.0
 
-  # UI
+  # UI Core
   flutter_screenutil: ^5.9.0
   google_fonts: ^6.1.0
   cached_network_image: ^3.3.0
   flutter_svg: ^2.0.10+1
   lottie: ^3.0.0
   shimmer: ^3.0.0
-  glassmorphism: ^3.0.0
+
+  # V2 UI Additions
+  flutter_animate: ^4.5.0
+  gap: ^3.0.1
+  smooth_page_indicator: ^1.1.0
+  flutter_staggered_grid_view: ^0.7.0
+  pin_code_fields: ^8.0.1
 
   # Image handling
   image_picker: ^1.0.7
@@ -49,13 +55,13 @@ dependencies:
   # Date + time
   intl: ^0.19.0
   table_calendar: ^3.0.9
+  timeago: ^3.6.1
 
   # Charts
   fl_chart: ^0.66.2
 
   # Misc utils
   uuid: ^4.3.3
-  timeago: ^3.6.1
   url_launcher: ^6.2.4
   share_plus: ^10.0.0
   permission_handler: ^11.3.0

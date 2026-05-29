@@ -28,8 +28,8 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
-  // WHO
-  bool _forPartner = false;
+  // WHO - locked to Me strictly
+  final bool _forPartner = false;
 
   // Shared fields
   String?  _mealType;
@@ -47,6 +47,46 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen>
   final _descCtrl = TextEditingController();
 
   bool _isSaving = false;
+
+  // AI Calorie Estimation V2 States
+  bool _isEstimatingCalories = false;
+  int? _estMin;
+  int? _estMax;
+  String? _estConfidence;
+
+  Future<void> _estimateCaloriesForText(String description) async {
+    if (description.trim().isEmpty) return;
+    setState(() {
+      _isEstimatingCalories = true;
+      _estMin = null;
+      _estMax = null;
+      _estConfidence = null;
+    });
+
+    try {
+      final result = await ref
+          .read(foodProvider.notifier)
+          .estimateCalories(description);
+      if (result != null && mounted) {
+        setState(() {
+          _estMin = result['min_calories'] as int?;
+          _estMax = result['max_calories'] as int?;
+          _estConfidence = result['confidence'] as String?;
+          if (_estMin != null && _estMax != null) {
+            final avg = ((_estMin! + _estMax!) / 2).round();
+            _caloriesCtrl.text = avg.toString();
+          }
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isEstimatingCalories = false;
+        });
+      }
+    }
+  }
 
   static const _suggestions = [
     'Rice and dal',
@@ -110,6 +150,9 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen>
           _descCtrl.text = foods.join(', ');
         }
       });
+      if (foods.isNotEmpty) {
+        _estimateCaloriesForText(foods.join(', '));
+      }
     } catch (_) {
       setState(() {
         _isUploading = false;
@@ -239,17 +282,7 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen>
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
           children: [
-            // ── WHO toggle ───────────────────────────────────────────
-            if (coupleState?.partner != null) ...[
-              _WhoToggle(
-                forPartner:   _forPartner,
-                myLabel:      myName,
-                partnerLabel: partnerName,
-                tc:           tc,
-                onChanged:    (v) => setState(() => _forPartner = v),
-              ),
-              const SizedBox(height: 16),
-            ],
+            // WHO toggle is removed - food log is always for current user 'Me' in He Space
 
             // ── Tab content ──────────────────────────────────────────
             SizedBox(
@@ -268,6 +301,7 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen>
                     onUseFood:     (name) => setState(() {
                       _descCtrl.text = name;
                       _tab.animateTo(1);
+                      _estimateCaloriesForText(name);
                     }),
                   ),
                   _TextTab(
@@ -277,6 +311,15 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen>
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Portion size chips ────────────────────────────────────
+            _SectionLabel(label: 'Portion Size / Quantity', tc: tc),
+            const SizedBox(height: 10),
+            _QuantityChips(
+              controller: _descCtrl,
+              tc:         tc,
             ),
             const SizedBox(height: 20),
 
@@ -310,12 +353,14 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen>
                 style: GoogleFonts.dmSans(
                   fontSize: 14,
                   color: tc.textPrimary,
+                  fontStyle: FontStyle.normal,
                 ),
                 decoration: InputDecoration(
                   hintText: 'Describe how you felt or any notes about this meal…',
                   hintStyle: GoogleFonts.dmSans(
                     color: tc.textMuted,
                     fontSize: 13,
+                    fontStyle: FontStyle.normal,
                   ),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
@@ -325,8 +370,128 @@ class _AddFoodScreenState extends ConsumerState<AddFoodScreen>
             ),
             const SizedBox(height: 20),
 
-            // ── Calories ─────────────────────────────────────────────
-            _CaloriesField(controller: _caloriesCtrl, tc: tc),
+            // ── Calories & AI Estimation ──────────────────────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: _CaloriesField(controller: _caloriesCtrl, tc: tc),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: _isEstimatingCalories
+                      ? null
+                      : () {
+                          final desc = _descCtrl.text.trim();
+                          if (desc.isEmpty) {
+                            _snack('Please add a description or photo first');
+                            return;
+                          }
+                          _estimateCaloriesForText(desc);
+                        },
+                  icon: _isEstimatingCalories
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.auto_awesome_rounded, size: 14),
+                  label: Text(
+                    'AI Estimate',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      fontStyle: FontStyle.normal,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE8607A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+            if (_isEstimatingCalories) ...[
+              const SizedBox(height: 10),
+              Shimmer.fromColors(
+                baseColor:      tc.cardColor,
+                highlightColor: tc.borderColor,
+                child: Container(
+                  height: 48,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: tc.cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ] else if (_estMin != null && _estMax != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: tc.iconColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: tc.iconColor.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Text('✨', style: TextStyle(fontSize: 16)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'AI Estimated Calories',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: tc.textMuted,
+                              fontStyle: FontStyle.normal,
+                            ),
+                          ),
+                          Text(
+                            '$_estMin - $_estMax kcal (${_estConfidence ?? 'medium'} confidence)',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: tc.iconColor,
+                              fontStyle: FontStyle.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        final avg = ((_estMin! + _estMax!) / 2).round();
+                        _caloriesCtrl.text = avg.toString();
+                        _snack('Confirmed estimate average: $avg kcal!');
+                      },
+                      child: Text(
+                        'Confirm',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 12,
+                          color: tc.iconColor,
+                          fontWeight: FontWeight.bold,
+                          fontStyle: FontStyle.normal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 28),
 
             // ── Submit ───────────────────────────────────────────────
@@ -949,6 +1114,64 @@ class _SectionLabel extends StatelessWidget {
         fontWeight: FontWeight.w600,
         color: tc.textMuted,
         letterSpacing: 0.4,
+        fontStyle: FontStyle.normal,
+      ),
+    );
+  }
+}
+
+// ── Portion Quantity Chips ───────────────────────────────────────────────────
+
+class _QuantityChips extends StatelessWidget {
+  final TextEditingController controller;
+  final ThemeColors tc;
+
+  const _QuantityChips({
+    required this.controller,
+    required this.tc,
+  });
+
+  static const _quantities = [
+    'small',
+    'medium',
+    'large',
+    '1 bowl',
+    'half plate',
+    '2 pieces',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: _quantities.map((q) => Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: ActionChip(
+            label: Text(
+              q,
+              style: GoogleFonts.dmSans(
+                fontSize: 12,
+                color: tc.iconColor,
+                fontStyle: FontStyle.normal,
+              ),
+            ),
+            backgroundColor: tc.iconColor.withValues(alpha: 0.08),
+            side: BorderSide(color: tc.iconColor.withValues(alpha: 0.25)),
+            onPressed: () {
+              final existing = controller.text.trim();
+              if (existing.isEmpty) {
+                controller.text = q;
+              } else {
+                controller.text = '$existing ($q)';
+              }
+              controller.selection = TextSelection.fromPosition(
+                TextPosition(offset: controller.text.length),
+              );
+            },
+          ),
+        )).toList(),
       ),
     );
   }

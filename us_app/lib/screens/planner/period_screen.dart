@@ -12,8 +12,9 @@ import '../../providers/couple_provider.dart';
 import '../../providers/memory_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/pronoun_helper.dart';
-import '../../widgets/glass_card.dart';
-import '../../widgets/rose_button.dart';
+import '../../models/memory_model.dart';
+import '../../widgets/v2/glass_container.dart';
+import '../../widgets/v2/space_header.dart';
 
 class PeriodScreen extends ConsumerStatefulWidget {
   const PeriodScreen({super.key});
@@ -41,11 +42,15 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
       backgroundColor: tc.backgroundColor,
       body: Column(
         children: [
-          _buildHeader(tc),
+          SpaceSubHeader(
+            title: 'Cycle & Care',
+            gradientColors: const [Color(0xFFC97B93), Color(0xFFE8A0B4)],
+            onBack: () => context.pop(),
+          ),
           Expanded(
             child: periodState.when(
               loading: () => Center(
-                child: CircularProgressIndicator(color: tc.iconColor),
+                child: CircularProgressIndicator(color: const Color(0xFFC97B93)),
               ),
               error: (e, _) => Center(child: Text('Error: $e', style: TextStyle(color: tc.textPrimary))),
               data: (cycle) => _buildContent(cycle, tc),
@@ -56,432 +61,508 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
+  Widget _buildContent(PeriodCycleModel? cycle, ThemeColors tc) {
+    final memories = ref.watch(memoryProvider).valueOrNull ?? [];
+    final coupleState = ref.watch(coupleProvider).valueOrNull;
+    final myId = coupleState?.currentUser?.id;
+    final partnerPronoun = coupleState?.currentUser?.partnerPronoun ?? 'she';
+    
+    // Determine if logged user is female (i.e. self tracking)
+    final isMe = cycle != null && cycle.userId == myId;
 
-  Widget _buildHeader(ThemeColors tc) {
-    return Container(
-      decoration: BoxDecoration(
-        color: tc.cardColor,
-        border: Border(bottom: BorderSide(color: tc.borderColor)),
+    final notifier = ref.read(periodProvider.notifier);
+    final isOnPeriod = notifier.currentlyOnPeriod;
+    final daysUntil = notifier.daysUntilNext ?? 0;
+
+    // Calculate days elapsed in cycle
+    int daysElapsed = 0;
+    if (cycle != null) {
+      final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final start = DateTime(cycle.startDate.year, cycle.startDate.month, cycle.startDate.day);
+      daysElapsed = today.difference(start).inDays;
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+      physics: const BouncingScrollPhysics(),
+      children: [
+        // ── STATUS CARD ──────────────────────────────────────────────────────
+        _buildStatusCard(cycle, notifier, isMe, partnerPronoun, tc),
+        const SizedBox(height: 20),
+        
+        ElevatedButton.icon(
+          onPressed: () => _showLogSheet(tc),
+          icon: const Icon(Icons.add_rounded),
+          label: Text(
+            isOnPeriod ? 'Log Next Cycle' : 'Log Period Start',
+            style: GoogleFonts.dmSans(fontWeight: FontWeight.bold, fontStyle: FontStyle.normal),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFC97B93),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+        const SizedBox(height: 28),
+
+        // ── CARE MODE CARD ───────────────────────────────────────────────────
+        if (cycle != null) ...[
+          _buildCareModePanel(daysElapsed, isOnPeriod, isMe, partnerPronoun, tc),
+          const SizedBox(height: 28),
+        ],
+
+        // ── DYNAMIC CARE TIPS ────────────────────────────────────────────────
+        _buildDynamicCareTips(memories, cycle, daysElapsed, isMe, partnerPronoun, tc),
+        const SizedBox(height: 28),
+
+        // ── TIMELINE HISTORY ─────────────────────────────────────────────────
+        _buildHistoryTimeline(tc),
+      ],
+    );
+  }
+
+  // Status Card with Detailed Cycle Dial Painter
+  Widget _buildStatusCard(
+    PeriodCycleModel? cycle,
+    PeriodNotifier notifier,
+    bool isMe,
+    String partnerPronoun,
+    ThemeColors tc,
+  ) {
+    if (cycle == null) {
+      return BlushGlassCard(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const Text('🌸', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            Text(
+              isMe ? 'Track your cycle to receive personal care' : 'Log her first period to start tracking',
+              style: GoogleFonts.dmSans(fontSize: 14.5, color: const Color(0xFF4A2535), fontWeight: FontWeight.bold, fontStyle: FontStyle.normal),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    final daysUntil = notifier.daysUntilNext ?? 0;
+    final isOnPeriod = notifier.currentlyOnPeriod;
+    final nextDate = notifier.nextPeriodDate;
+
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final start = DateTime(cycle.startDate.year, cycle.startDate.month, cycle.startDate.day);
+    final daysElapsed = today.difference(start).inDays;
+    final progress = (daysElapsed / cycle.cycleLength).clamp(0.0, 1.0);
+
+    Widget descriptionContent;
+
+    if (isOnPeriod) {
+      final dayNum = daysElapsed + 1;
+      descriptionContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Day $dayNum',
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 38,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF1A0A0F),
+              fontStyle: FontStyle.normal,
+            ),
+          ),
+          Text(
+            isMe ? 'of my period' : 'of her period',
+            style: GoogleFonts.dmSans(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w600, fontStyle: FontStyle.normal),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isMe ? 'Be extra gentle today 💕' : 'Be extra gentle today 💕',
+            style: GoogleFonts.dmSans(fontSize: 12.5, color: const Color(0xFFC97B93), fontWeight: FontWeight.bold, fontStyle: FontStyle.normal),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFFC97B93),
+              side: const BorderSide(color: Color(0xFFC97B93)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            ),
+            onPressed: () => notifier.updateEndDate(cycle.id, DateTime.now()),
+            child: Text(
+              'Mark as ended',
+              style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.bold, fontStyle: FontStyle.normal),
+            ),
+          ),
+        ],
+      );
+    } else {
+      descriptionContent = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            daysUntil <= 0 ? 'Starts' : '$daysUntil',
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 48,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF1A0A0F),
+              fontStyle: FontStyle.normal,
+            ),
+          ),
+          Text(
+            daysUntil <= 0 ? 'today!' : 'days remaining',
+            style: GoogleFonts.dmSans(fontSize: 12.5, color: Colors.black54, fontWeight: FontWeight.w600, fontStyle: FontStyle.normal),
+          ),
+          if (nextDate != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Expected ${DateFormat.MMMd().format(nextDate)}',
+              style: GoogleFonts.dmSans(fontSize: 11, color: Colors.black38, fontStyle: FontStyle.normal),
+            ),
+          ],
+        ],
+      );
+    }
+
+    return BlushGlassCard(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          Expanded(child: descriptionContent),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 140,
+            height: 140,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CustomPaint(
+                  size: const Size(140, 140),
+                  painter: _DetailedCycleDial(progress, cycle.cycleLength, isOnPeriod),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Day $daysElapsed',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1A0A0F),
+                        fontStyle: FontStyle.normal,
+                      ),
+                    ),
+                    Text(
+                      'of ${cycle.cycleLength}',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 10,
+                        color: Colors.black54,
+                        fontStyle: FontStyle.normal,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 12, 24, 24),
+    );
+  }
+
+  // Care Mode dynamic card
+  Widget _buildCareModePanel(int daysElapsed, bool isOnPeriod, bool isMe, String partnerPronoun, ThemeColors tc) {
+    String title = '';
+    String description = '';
+    Color statusColor = const Color(0xFFC97B93);
+
+    if (isOnPeriod) {
+      title = 'Period Week';
+      description = isMe
+          ? 'Focus on comfort, warmth, and cozy rests. Your energy is at its lowest phase.'
+          : 'Period week — comfort and care are essential. Bring her dynamic warmth, cozy treats, and extra patience.';
+      statusColor = const Color(0xFFE8607A);
+    } else if (daysElapsed >= 21) {
+      title = 'PMS Week';
+      description = isMe
+          ? 'Hormones shifting. Rest up, lower stressors, and allow yourself deep breaths.'
+          : 'PMS week — hormones shifting. Extra patience, listening, and quiet support are needed this week.';
+      statusColor = const Color(0xFF9B2647);
+    } else if (daysElapsed >= 15) {
+      title = 'Luteal Phase';
+      description = isMe
+          ? 'Energy is shifting. Perfect time for soft mindfulness, light routines, and comfort.'
+          : 'Luteal transition. She is transitioning into a calmer phase. Cozy movie nights and low-intensity dates fit best.';
+      statusColor = const Color(0xFFC97B93);
+    } else if (daysElapsed >= 11 && daysElapsed <= 14) {
+      title = 'Fertility / Ovulation';
+      description = isMe
+          ? 'Estrogen levels at peak! High energy, clear confidence, and great physical state.'
+          : 'Ovulation peak. Her mood and energy are at their bright heights! Perfect for active dates and adventures.';
+      statusColor = const Color(0xFF8BB5C9);
+    } else {
+      title = 'Recovery & Focus';
+      description = isMe
+          ? 'Recovery phase. Focus on rebuilding energies, gym routines, and starting fresh ambitious targets.'
+          : 'Recovery phase — energy is returning. A supportive and active week to build projects and share goals.';
+      statusColor = const Color(0xFFA0C9A5);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSubtitleHeader('Current Cycle Status', 'Dynamic care phase mapping'),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.03),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: statusColor.withValues(alpha: 0.25), width: 1.5),
+            boxShadow: [
+              BoxShadow(color: statusColor.withValues(alpha: 0.03), blurRadius: 16, offset: const Offset(0, 4)),
+            ],
+          ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              IconButton(
-                icon: Icon(Icons.arrow_back_ios_new_rounded,
-                    color: tc.textPrimary, size: 20),
-                onPressed: () => context.pop(),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                child: Icon(Icons.bubble_chart_rounded, color: statusColor, size: 20),
               ),
-              Text(
-                'Cycle Tracker',
-                style: GoogleFonts.playfairDisplay(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: tc.textPrimary,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontStyle: FontStyle.normal,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.6),
+                        height: 1.4,
+                        fontStyle: FontStyle.normal,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  // ── Main content ───────────────────────────────────────────────────────────
-
-  Widget _buildContent(PeriodCycleModel? cycle, ThemeColors tc) {
-    final notifier = ref.read(periodProvider.notifier);
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-      children: [
-        _buildStatusCard(cycle, notifier, tc),
-        const SizedBox(height: 20),
-        RoseButton(label: 'Log Period Start', onTap: () => _showLogSheet(tc)),
-        const SizedBox(height: 32),
-        _buildCareTips(tc),
-        const SizedBox(height: 32),
-        _buildHistory(tc),
       ],
     );
   }
 
-  // ── Status Card ────────────────────────────────────────────────────────────
+  // Dynamic Care Tips based on her actual favorite food/habit recorded memories
+  Widget _buildDynamicCareTips(
+    List<MemoryModel> memories,
+    PeriodCycleModel? cycle,
+    int daysElapsed,
+    bool isMe,
+    String partnerPronoun,
+    ThemeColors tc,
+  ) {
+    // Find food preferences in memories
+    final preferences = memories.where((m) => m.category == 'food' || m.category == 'habit').toList();
 
-  Widget _buildStatusCard(PeriodCycleModel? cycle, PeriodNotifier notifier, ThemeColors tc) {
-    Widget cardContent;
-
-    if (cycle == null) {
-      cardContent = _buildNoDataContent(tc);
-    } else if (notifier.currentlyOnPeriod) {
-      cardContent = _buildOnPeriodContent(cycle, notifier, tc);
-    } else {
-      cardContent = _buildCountdownContent(cycle, notifier, tc);
+    String comfortFoodText = '';
+    if (preferences.isNotEmpty) {
+      final item = preferences.first;
+      final parsed = ParsedMemory.parse(item.content);
+      comfortFoodText = parsed.cleanContent;
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: tc.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: tc.iconColor.withValues(alpha: 0.40),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: tc.iconColor.withValues(alpha: 0.09),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: GlassCard(
-        borderRadius: 19,
-        padding: const EdgeInsets.all(24),
-        child: cardContent,
-      ),
-    );
-  }
-
-  // No data state
-  Widget _buildNoDataContent(ThemeColors tc) {
-    final pronoun = ref.watch(coupleProvider).valueOrNull?.currentUser?.partnerPronoun ?? 'she';
-    return Column(
-      children: [
-        const Icon(Icons.favorite_border_rounded, size: 48, color: Colors.white70),
-        const SizedBox(height: 16),
-        Text(
-          'Log ${PronounHelper.possessive(pronoun).toLowerCase()} first period to start tracking',
-          style: GoogleFonts.dmSans(fontSize: 16, color: tc.textMuted),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  // Currently on period state
-  Widget _buildOnPeriodContent(PeriodCycleModel cycle, PeriodNotifier notifier, ThemeColors tc) {
-    final pronoun = ref.watch(coupleProvider).valueOrNull?.currentUser?.partnerPronoun ?? 'she';
-    final today = DateTime(
-        DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    final start = DateTime(
-        cycle.startDate.year, cycle.startDate.month, cycle.startDate.day);
-    final dayNum = today.difference(start).inDays + 1;
+    String finalTip = '';
+    if (cycle == null) {
+      finalTip = 'Record cycle details to generate personalized health suggestions.';
+    } else if (comfortFoodText.isNotEmpty) {
+      if (isMe) {
+        finalTip = 'Since you recorded "$comfortFoodText" in your preferences, it is a great comfort food option to satisfy cravings this week! 🍫';
+      } else {
+        finalTip = 'She loves "$comfortFoodText"! Surprise her by ordering or making this for her to match her comfort cravings this week! 💝';
+      }
+    } else {
+      if (isMe) {
+        finalTip = 'Remember to stay hydrated and prioritize comforting meals (like chocolates, fresh fruits, or warm soups) to nurture yourself this week.';
+      } else {
+        finalTip = 'No custom food preferences detected in observations yet. Notice what she loves to eat and capture it in He Space so we can dynamic-tailor tips!';
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              'Day $dayNum',
-              style: GoogleFonts.playfairDisplay(
-                fontSize: 44,
-                fontWeight: FontWeight.bold,
-                color: tc.iconColor,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'of ${PronounHelper.possessive(pronoun).toLowerCase()} period',
-                style: GoogleFonts.dmSans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: tc.textSecondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Be gentle with ${PronounHelper.object(pronoun).toLowerCase()} today 💕',
-          style: GoogleFonts.dmSans(fontSize: 14, color: tc.textMuted),
-        ),
-        const SizedBox(height: 20),
-        OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: tc.iconColor,
-            side: BorderSide(color: tc.iconColor),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        _buildSubtitleHeader('Dynamic Care Tips', 'Personalized suggestions from saved preferences'),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF160A0D),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFC97B93).withValues(alpha: 0.15)),
           ),
-          onPressed: () =>
-              notifier.updateEndDate(cycle.id, DateTime.now()),
-          child: Text(
-            'Mark period as ended',
-            style: GoogleFonts.dmSans(
-                fontWeight: FontWeight.w600, color: tc.iconColor),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Countdown state
-  Widget _buildCountdownContent(PeriodCycleModel cycle, PeriodNotifier notifier, ThemeColors tc) {
-    final daysUntil = notifier.daysUntilNext ?? 0;
-    final nextDate = notifier.nextPeriodDate;
-
-    final today = DateTime(
-        DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    final start = DateTime(
-        cycle.startDate.year, cycle.startDate.month, cycle.startDate.day);
-    final daysElapsed = today.difference(start).inDays;
-    final progress = (daysElapsed / cycle.cycleLength).clamp(0.0, 1.0);
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Next period in',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 13,
-                      color: tc.textMuted,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    daysUntil <= 0 ? '0' : '$daysUntil',
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 52,
-                      fontWeight: FontWeight.bold,
-                      color: tc.iconColor,
-                    ),
-                  ),
-                  Text(
-                    daysUntil <= 0 ? 'Due today!' : 'days',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 14,
-                      color: tc.textMuted,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (nextDate != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Around ${DateFormat.MMMd().format(nextDate)}',
+                  const Text('🍲', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      finalTip,
                       style: GoogleFonts.dmSans(
-                        fontSize: 12,
-                        color: tc.textMuted,
+                        fontSize: 12.5,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        height: 1.4,
+                        fontStyle: FontStyle.normal,
                       ),
                     ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 120,
-              height: 120,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CustomPaint(
-                    size: const Size(120, 120),
-                    painter: _CycleArcPainter(progress, tc.iconColor, tc.borderColor),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Day $daysElapsed',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: tc.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        'of ${cycle.cycleLength}',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 11,
-                          color: tc.textMuted,
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCareTips(ThemeColors tc) {
-    final memoriesState = ref.watch(memoryProvider);
-    final pronoun = ref.watch(coupleProvider).valueOrNull?.currentUser?.partnerPronoun ?? 'she';
-    final cardWidth =
-        (MediaQuery.of(context).size.width - 40 - 12) / 2;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'How to care for ${PronounHelper.object(pronoun).toLowerCase()} 💕',
-          style: GoogleFonts.playfairDisplay(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: tc.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 14),
-        memoriesState.when(
-          loading: () => const CircularProgressIndicator(),
-          error: (_, __) => const SizedBox(),
-          data: (memories) {
-            final tips = memoriesState.valueOrNull?.where((m) {
-          final isCareCategory = m.category.toLowerCase() == 'food' ||
-                                 m.category.toLowerCase() == 'care' ||
-                                 m.category.toLowerCase() == 'gift';
-          final contentLower = m.content.toLowerCase();
-          final isNegative = contentLower.contains('hate') || 
-                             contentLower.contains('dislike') || 
-                             contentLower.contains('never');
-          return isCareCategory && !isNegative;
-        }).toList() ?? [];
-            
-            return Column(
-              children: [
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: tips.isEmpty 
-                    ? [
-                        Text('No care tips added yet. Add one below!', 
-                          style: GoogleFonts.dmSans(color: tc.textMuted))
-                      ]
-                    : tips.map((m) {
-                    return SizedBox(
-                      width: cardWidth,
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: tc.cardColor,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: tc.borderColor),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(m.category.toLowerCase() == 'food' ? '🍲' : '💕',
-                                style: const TextStyle(fontSize: 20)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                m.content,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 13,
-                                  color: tc.textPrimary,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+              const SizedBox(height: 14),
+              // Add Care reminder TextField
+              TextField(
+                style: GoogleFonts.dmSans(fontSize: 12, color: Colors.white, fontStyle: FontStyle.normal),
+                decoration: InputDecoration(
+                  hintText: 'Add an custom care reminder...',
+                  hintStyle: GoogleFonts.dmSans(fontSize: 12, color: Colors.white.withValues(alpha: 0.25), fontStyle: FontStyle.normal),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: 0.02),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  suffixIcon: const Icon(Icons.add_circle, size: 18, color: Color(0xFFC97B93)),
+                ),
+                onSubmitted: (val) {
+                  if (val.trim().isNotEmpty) {
+                    final coupleState = ref.read(coupleProvider).valueOrNull;
+                    final targetOwner = coupleState?.partner?.id ?? coupleState?.currentUser?.id ?? 'single_mode';
+                    ref.read(memoryProvider.notifier).addMemory(
+                          content: val.trim(),
+                          category: 'habit',
+                          ownerId: targetOwner,
+                        );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Saved reminder! 🌸', style: GoogleFonts.dmSans(fontStyle: FontStyle.normal)),
+                        backgroundColor: const Color(0xFFC97B93),
                       ),
                     );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  style: GoogleFonts.dmSans(color: tc.textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Add a new care reminder...',
-                    hintStyle: GoogleFonts.dmSans(color: tc.textMuted),
-                    filled: true,
-                    fillColor: tc.cardColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: tc.borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: tc.borderColor),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(Icons.add_circle, color: tc.iconColor),
-                      onPressed: () {}, // Handled by onSubmitted
-                    ),
-                  ),
-                  onSubmitted: (val) {
-                    if (val.trim().isNotEmpty) {
-                      final coupleState = ref.read(coupleProvider).valueOrNull;
-                      final partnerId = coupleState?.partner?.id ?? coupleState?.currentUser?.id ?? 'single_mode';
-                      ref.read(memoryProvider.notifier).addMemory(
-                        val.trim(),
-                        'care',
-                        partnerId,
-                      );
-                    }
-                  },
-                ),
-              ],
-            );
-          },
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  // ── History ────────────────────────────────────────────────────────────────
-
-  Widget _buildHistory(ThemeColors tc) {
-    final historyState = ref.watch(periodHistoryProvider);
+  // History timeline scrapbook style
+  Widget _buildHistoryTimeline(ThemeColors tc) {
+    final history = ref.watch(periodHistoryProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'History',
-          style: GoogleFonts.playfairDisplay(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: tc.textPrimary,
-          ),
-        ),
+        _buildSubtitleHeader('Previous Cycles', 'Feminine history timeline'),
         const SizedBox(height: 14),
-        historyState.when(
-          loading: () => Center(
-              child: CircularProgressIndicator(color: tc.iconColor)),
-          error: (e, _) =>
-              Text('Error: $e', style: GoogleFonts.dmSans(color: tc.textMuted)),
-          data: (entries) {
-            // Only show completed cycles
-            final completed =
-                entries.where((c) => c.endDate != null).toList();
+        history.when(
+          loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFC97B93))),
+          error: (e, _) => Text('Error: $e'),
+          data: (list) {
+            final completed = list.where((c) => c.endDate != null).toList();
             if (completed.isEmpty) {
               return Center(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Text(
-                    'No completed cycles yet',
-                    style: GoogleFonts.dmSans(
-                        fontSize: 14, color: tc.textMuted),
+                    'No completed cycles logged yet. 🌸',
+                    style: GoogleFonts.dmSans(fontSize: 12.5, color: Colors.white24, fontStyle: FontStyle.normal),
                   ),
                 ),
               );
             }
-            return Column(
-              children: completed
-                  .map((c) => _buildHistoryItem(c, tc))
-                  .toList(),
+
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: completed.length,
+              itemBuilder: (context, idx) {
+                final c = completed[idx];
+                final duration = c.endDate!.difference(c.startDate).inDays + 1;
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.02),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${DateFormat('d MMM').format(c.startDate)} – ${DateFormat('d MMM yyyy').format(c.endDate!)}',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white70,
+                              fontStyle: FontStyle.normal,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '$duration days period flow',
+                            style: GoogleFonts.dmSans(fontSize: 11, color: Colors.white30, fontStyle: FontStyle.normal),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC97B93).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFC97B93).withValues(alpha: 0.2)),
+                        ),
+                        child: Text(
+                          '${c.cycleLength} days cycle',
+                          style: GoogleFonts.dmMono(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFC97B93),
+                            fontStyle: FontStyle.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             );
           },
         ),
@@ -489,78 +570,36 @@ class _PeriodScreenState extends ConsumerState<PeriodScreen> {
     );
   }
 
-  Widget _buildHistoryItem(PeriodCycleModel cycle, ThemeColors tc) {
-    final duration =
-        cycle.endDate!.difference(cycle.startDate).inDays + 1;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: tc.cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: tc.borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+  Widget _buildSubtitleHeader(String title, String desc) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.playfairDisplay(
+            fontSize: 16.5,
+            fontWeight: FontWeight.bold,
+            color: Colors.white70,
+            fontStyle: FontStyle.normal,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${DateFormat.MMMd().format(cycle.startDate)} – ${DateFormat.MMMd().format(cycle.endDate!)}',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: tc.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$duration day period',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 12, color: tc.textMuted),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: tc.iconColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(100),
-            ),
-            child: Text(
-              '${cycle.cycleLength}-day cycle',
-              style: GoogleFonts.dmSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: tc.iconColor,
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          desc,
+          style: GoogleFonts.dmSans(fontSize: 10.5, color: Colors.white24, fontStyle: FontStyle.normal),
+        ),
+      ],
     );
   }
 }
 
-// ── Arc Painter ────────────────────────────────────────────────────────────────
-
-class _CycleArcPainter extends CustomPainter {
+// Custom painter drawing Detailed Ovulation, Cycle Dial
+class _DetailedCycleDial extends CustomPainter {
   final double progress;
-  final Color activeColor;
-  final Color trackColor;
+  final int cycleLength;
+  final bool isOnPeriod;
 
-  const _CycleArcPainter(this.progress, this.activeColor, this.trackColor);
+  const _DetailedCycleDial(this.progress, this.cycleLength, this.isOnPeriod);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -568,38 +607,58 @@ class _CycleArcPainter extends CustomPainter {
     final radius = size.width / 2 - 10;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Track
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = trackColor
-        ..strokeWidth = 10
-        ..style = PaintingStyle.stroke,
-    );
+    // Track circle
+    final trackPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.04)
+      ..strokeWidth = 10
+      ..style = PaintingStyle.stroke;
+    canvas.drawCircle(center, radius, trackPaint);
 
-    if (progress <= 0) return;
+    // Dynamic phase indicators overlay
+    // Flow/Period Phase (Days 1-5, red sector)
+    final flowPaint = Paint()
+      ..color = const Color(0xFFE8607A).withValues(alpha: 0.15)
+      ..strokeWidth = 6
+      ..style = PaintingStyle.stroke;
+    canvas.drawArc(rect, -math.pi / 2, (2 * math.pi) * (5 / cycleLength), false, flowPaint);
 
-    // Progress arc with gradient
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      2 * math.pi * progress.clamp(0.0, 1.0),
-      false,
-      Paint()
-        ..color = activeColor
-        ..strokeWidth = 10
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
+    // Ovulation / Fertility peak (Days 12-16, blue glow arc)
+    final fertilePaint = Paint()
+      ..color = const Color(0xFF8BB5C9).withValues(alpha: 0.15)
+      ..strokeWidth = 6
+      ..style = PaintingStyle.stroke;
+    canvas.drawArc(rect, -math.pi / 2 + (2 * math.pi) * (11 / cycleLength), (2 * math.pi) * (5 / cycleLength), false, fertilePaint);
+
+    // Progress Arc
+    final progressPaint = Paint()
+      ..color = isOnPeriod ? const Color(0xFFE8607A) : const Color(0xFFC97B93)
+      ..strokeWidth = 10
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi * progress.clamp(0.0, 1.0), false, progressPaint);
+
+    // Indicator Dot
+    final angle = -math.pi / 2 + 2 * math.pi * progress;
+    final dotOffset = Offset(
+      center.dx + radius * math.cos(angle),
+      center.dy + radius * math.sin(angle),
     );
+    final dotPaint = Paint()..color = Colors.white;
+    canvas.drawCircle(dotOffset, 7, dotPaint);
+
+    final dotOutline = Paint()
+      ..color = const Color(0xFFC97B93)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawCircle(dotOffset, 7, dotOutline);
   }
 
   @override
-  bool shouldRepaint(_CycleArcPainter old) => old.progress != progress || old.activeColor != activeColor || old.trackColor != trackColor;
+  bool shouldRepaint(_DetailedCycleDial old) =>
+      old.progress != progress || old.cycleLength != cycleLength || old.isOnPeriod != isOnPeriod;
 }
 
-// ── Log Period Bottom Sheet ────────────────────────────────────────────────────
-
+// Bottom sheet cycle logger
 class _LogPeriodSheet extends ConsumerStatefulWidget {
   const _LogPeriodSheet();
 
@@ -612,18 +671,18 @@ class _LogPeriodSheetState extends ConsumerState<_LogPeriodSheet> {
   int _cycleLength = 28;
   bool _isSaving = false;
 
-  Future<void> _pickDate(ThemeColors tc) async {
+  Future<void> _pickDate() async {
     final date = await showDatePicker(
       context: context,
       initialDate: _startDate,
-      firstDate: DateTime.now().subtract(const Duration(days: 60)),
+      firstDate: DateTime.now().subtract(const Duration(days: 45)),
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-            primary: tc.iconColor,
-            surface: tc.cardColor,
-            onSurface: tc.textPrimary,
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFFC97B93),
+            surface: Color(0xFF160A0D),
+            onSurface: Colors.white,
           ),
         ),
         child: child!,
@@ -632,19 +691,17 @@ class _LogPeriodSheetState extends ConsumerState<_LogPeriodSheet> {
     if (date != null) setState(() => _startDate = date);
   }
 
-  Future<void> _save(ThemeColors tc) async {
+  Future<void> _save() async {
     setState(() => _isSaving = true);
     try {
-      await ref
-          .read(periodProvider.notifier)
-          .logPeriod(_startDate, _cycleLength);
+      await ref.read(periodProvider.notifier).logPeriod(_startDate, _cycleLength);
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Logged. I'll remind you before next time 💕"),
-          backgroundColor: tc.iconColor,
+          content: Text("Cycle logged! Reminders are active 💕", style: GoogleFonts.dmSans(fontStyle: FontStyle.normal)),
+          backgroundColor: const Color(0xFFC97B93),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -653,9 +710,8 @@ class _LogPeriodSheetState extends ConsumerState<_LogPeriodSheet> {
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Error saving: $e'),
           backgroundColor: Colors.redAccent,
-          behavior: SnackBarBehavior.floating,
         ),
       );
     }
@@ -663,137 +719,98 @@ class _LogPeriodSheetState extends ConsumerState<_LogPeriodSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final tc = ref.watch(themeProvider).colors;
-    final pronoun = ref.watch(coupleProvider).valueOrNull?.currentUser?.partnerPronoun ?? 'she';
-
     return Container(
-      decoration: BoxDecoration(
-        color: tc.cardColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      decoration: const BoxDecoration(
+        color: Color(0xFF160A0D),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
+        left: 20,
+        right: 20,
+        top: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 32,
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle
           Center(
             child: Container(
               width: 40,
               height: 4,
-              decoration: BoxDecoration(
-                color: tc.textMuted.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(2),
-              ),
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
-            'Log Period Start',
+            'Log Cycle Start',
             style: GoogleFonts.playfairDisplay(
-              fontSize: 24,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: tc.textPrimary,
+              color: Colors.white,
+              fontStyle: FontStyle.normal,
             ),
           ),
           const SizedBox(height: 24),
-
-          // Date picker row
           Text(
-            'When did it start?',
-            style: GoogleFonts.dmSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tc.textMuted,
-              letterSpacing: 0.3,
-            ),
+            'Start Date',
+            style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.bold, color: Colors.white54, fontStyle: FontStyle.normal),
           ),
           const SizedBox(height: 8),
           GestureDetector(
-            onTap: () => _pickDate(tc),
+            onTap: _pickDate,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                border: Border.all(color: tc.borderColor, width: 1.5),
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.02),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(Icons.calendar_today_outlined,
-                      color: tc.iconColor, size: 18),
-                  const SizedBox(width: 12),
                   Text(
-                    DateFormat.yMMMd().format(_startDate),
-                    style: GoogleFonts.dmSans(
-                      fontWeight: FontWeight.w600,
-                      color: tc.textPrimary,
-                      fontSize: 15,
-                    ),
+                    DateFormat('d MMMM yyyy').format(_startDate),
+                    style: GoogleFonts.dmSans(fontSize: 13.5, color: Colors.white70, fontStyle: FontStyle.normal),
                   ),
-                  const Spacer(),
-                  Icon(Icons.chevron_right,
-                      color: tc.textMuted, size: 20),
+                  const Icon(Icons.calendar_month_outlined, size: 16, color: Color(0xFFC97B93)),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 28),
-
-          // Cycle length slider
-          Text.rich(
-            TextSpan(
-              style: GoogleFonts.dmSans(fontSize: 14, color: tc.textPrimary),
-              children: [
-                TextSpan(text: '${PronounHelper.possessive(pronoun)} cycle is usually '),
-                TextSpan(
-                  text: '$_cycleLength days',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: tc.iconColor,
-                  ),
-                ),
-                const TextSpan(text: ' days'),
-              ],
-            ),
+          const SizedBox(height: 20),
+          Text(
+            'Typical Cycle Duration: $_cycleLength days',
+            style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.bold, color: Colors.white54, fontStyle: FontStyle.normal),
           ),
+          const SizedBox(height: 6),
           Slider(
             value: _cycleLength.toDouble(),
             min: 21,
             max: 35,
             divisions: 14,
-            activeColor: tc.iconColor,
-            inactiveColor: tc.iconColor.withValues(alpha: 0.3),
+            activeColor: const Color(0xFFC97B93),
+            inactiveColor: Colors.white10,
             label: '$_cycleLength days',
-            onChanged: (v) => setState(() => _cycleLength = v.round()),
+            onChanged: (val) => setState(() => _cycleLength = val.round()),
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('21',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 11, color: tc.textMuted)),
-              Text('35',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 11, color: tc.textMuted)),
-            ],
-          ),
-          const SizedBox(height: 28),
-
-          RoseButton(
-            label: 'Save',
-            isLoading: _isSaving,
-            onTap: _isSaving ? null : () => _save(tc),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isSaving ? null : _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFC97B93),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: _isSaving
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text('Save Cycle', style: GoogleFonts.dmSans(fontWeight: FontWeight.bold, fontStyle: FontStyle.normal)),
+            ),
           ),
         ],
-      ),
       ),
     );
   }

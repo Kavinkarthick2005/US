@@ -38,41 +38,43 @@ class PeriodNotifier extends AsyncNotifier<PeriodCycleModel?> {
   }
 
   Future<void> logPeriod(DateTime startDate, int cycleLength) async {
+    final myId = _sb.auth.currentUser?.id;
+    if (myId == null) return;
+
     final coupleState = ref.read(coupleProvider).valueOrNull;
-    final myId = coupleState?.currentUser?.id;
     final partnerId = coupleState?.partner?.id;
-    final targetId = partnerId ?? myId;
-    if (myId == null || targetId == null) return;
 
     try {
       final inserted = await _sb.from('period_tracking').insert({
-        'user_id': targetId,
+        'user_id': myId,
         'start_date': startDate.toUtc().toIso8601String(),
         'cycle_length': cycleLength,
       }).select().single();
 
-    final nextPeriod = startDate.add(Duration(days: cycleLength));
-    final myRemind = nextPeriod.subtract(const Duration(days: 3));
-    final herRemind = nextPeriod.subtract(const Duration(days: 1));
+      final nextPeriod = startDate.add(Duration(days: cycleLength));
+      final herRemind = nextPeriod.subtract(const Duration(days: 1)); // 1 day before for her
+      final partnerRemind = nextPeriod.subtract(const Duration(days: 3)); // 3 days before for partner
 
-    await _sb.from('reminders').insert({
-      'user_id': myId,
-      'remind_to': myId,
-      'title': 'Her period starts in 3 days 💕 Be extra kind',
-      'remind_at': DateTime(myRemind.year, myRemind.month, myRemind.day, 9, 0)
-          .toUtc()
-          .toIso8601String(),
-      'repeat_type': ReminderModel.repeatNone,
-      'category': ReminderModel.catPeriod,
-      'is_active': true,
-    });
+      // Reminder for herself
+      await _sb.from('reminders').insert({
+        'user_id': myId,
+        'remind_to': myId,
+        'title': 'Your period starts tomorrow 🌸',
+        'remind_at': DateTime(herRemind.year, herRemind.month, herRemind.day, 8, 0)
+            .toUtc()
+            .toIso8601String(),
+        'repeat_type': ReminderModel.repeatNone,
+        'category': ReminderModel.catPeriod,
+        'is_active': true,
+      });
 
+      // Reminder for partner (if couple linked)
       if (partnerId != null) {
         await _sb.from('reminders').insert({
           'user_id': myId,
           'remind_to': partnerId,
-          'title': 'Your period starts tomorrow 🌸',
-          'remind_at': DateTime(herRemind.year, herRemind.month, herRemind.day, 8, 0)
+          'title': 'Her period starts in 3 days 💕 Be extra kind',
+          'remind_at': DateTime(partnerRemind.year, partnerRemind.month, partnerRemind.day, 9, 0)
               .toUtc()
               .toIso8601String(),
           'repeat_type': ReminderModel.repeatNone,
@@ -129,14 +131,17 @@ final periodHistoryProvider =
   final coupleState = await ref.watch(coupleProvider.future);
   final myId = coupleState.currentUser?.id;
   final partnerId = coupleState.partner?.id;
-  final targetId = partnerId ?? myId;
-  if (targetId == null) return [];
+  if (myId == null) return [];
 
   try {
-    final data = await Supabase.instance.client
-        .from('period_tracking')
-        .select()
-        .eq('user_id', targetId)
+    var query = Supabase.instance.client.from('period_tracking').select();
+    if (partnerId != null) {
+      query = query.or('user_id.eq.$myId,user_id.eq.$partnerId');
+    } else {
+      query = query.eq('user_id', myId);
+    }
+    
+    final data = await query
         .order('start_date', ascending: false)
         .limit(12);
     return (data as List)

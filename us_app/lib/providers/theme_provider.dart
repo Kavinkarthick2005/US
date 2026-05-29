@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_colors.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ThemeColors — the single source of truth for every dynamic color in the app
+// ThemeColors — single source of truth for every dynamic color
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ThemeColors {
@@ -36,7 +36,7 @@ class ThemeColors {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// All 6 mood themes — complete color sets
+// All mood themes — 5 public + 1 secret
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MoodThemes {
@@ -102,6 +102,19 @@ class MoodThemes {
     bottomNavColor:  Color(0xFF2E0D16),
   );
 
+  // The Originals — secret theme, never referenced by name in UI until unlocked
+  static const theOriginals = ThemeColors(
+    backgroundColor: Color(0xFF120308),
+    cardColor:       Color(0xFF1F0610),
+    textPrimary:     Color(0xFFF0E6D3),
+    textSecondary:   Color(0xFFD4B896),
+    textMuted:       Color(0xFF8A6B5A),
+    borderColor:     Color(0xFF3E0E1E),
+    iconColor:       Color(0xFFD4AF37),
+    inputFillColor:  Color(0xFF190408),
+    bottomNavColor:  Color(0xFF1F0610),
+  );
+
   static const defaultTheme = ThemeColors(
     backgroundColor: Color(0xFFFEFAF9),
     cardColor:       Color(0xFFFFFFFF),
@@ -115,12 +128,42 @@ class MoodThemes {
   );
 
   static const Map<String, ThemeColors> all = {
-    'softMorning': softMorning,
-    'cozyNight':   cozyNight,
-    'dateNight':   dateNight,
-    'rainyMood':   rainyMood,
-    'anniversary': anniversary,
-    'default':     defaultTheme,
+    'softMorning':  softMorning,
+    'cozyNight':    cozyNight,
+    'dateNight':    dateNight,
+    'rainyMood':    rainyMood,
+    'anniversary':  anniversary,
+    'theOriginals': theOriginals,
+    'default':      defaultTheme,
+  };
+
+  // Public themes shown in settings (Originals shown only when unlocked)
+  static const List<String> publicThemeKeys = [
+    'softMorning',
+    'cozyNight',
+    'dateNight',
+    'rainyMood',
+    'anniversary',
+  ];
+
+  static const Map<String, String> themeDisplayNames = {
+    'softMorning':  'Soft Morning',
+    'cozyNight':    'Cozy Night',
+    'dateNight':    'Date Night',
+    'rainyMood':    'Rainy Mood',
+    'anniversary':  'Anniversary',
+    'theOriginals': 'The Originals',
+    'default':      'Default',
+  };
+
+  static const Map<String, List<Color>> themePreviewGradients = {
+    'softMorning':  [Color(0xFFE8607A), Color(0xFFF9E4EA)],
+    'cozyNight':    [Color(0xFF1E0D14), Color(0xFF3D1525)],
+    'dateNight':    [Color(0xFF1A1400), Color(0xFF2A2200)],
+    'rainyMood':    [Color(0xFF242E42), Color(0xFF2E3E58)],
+    'anniversary':  [Color(0xFF2E0D16), Color(0xFF4A1525)],
+    'theOriginals': [Color(0xFF1F0610), Color(0xFF3E0E1E)],
+    'default':      [Color(0xFFE8607A), Color(0xFFF9E4EA)],
   };
 }
 
@@ -133,15 +176,16 @@ class AppThemeState {
   final Color accentColor;
   final String? wallpaperPath;
   final bool isDark;
+  final bool isOriginalsUnlocked;
 
   AppThemeState({
     required this.moodTheme,
     required this.accentColor,
     this.wallpaperPath,
     required this.isDark,
+    this.isOriginalsUnlocked = false,
   });
 
-  /// Returns the ThemeColors for the current moodTheme.
   ThemeColors get colors =>
       MoodThemes.all[moodTheme] ?? MoodThemes.defaultTheme;
 
@@ -151,12 +195,14 @@ class AppThemeState {
     String? wallpaperPath,
     bool? isDark,
     bool clearWallpaper = false,
+    bool? isOriginalsUnlocked,
   }) {
     return AppThemeState(
-      moodTheme:     moodTheme    ?? this.moodTheme,
-      accentColor:   accentColor  ?? this.accentColor,
-      wallpaperPath: clearWallpaper ? null : (wallpaperPath ?? this.wallpaperPath),
-      isDark:        isDark       ?? this.isDark,
+      moodTheme:           moodTheme           ?? this.moodTheme,
+      accentColor:         accentColor         ?? this.accentColor,
+      wallpaperPath:       clearWallpaper ? null : (wallpaperPath ?? this.wallpaperPath),
+      isDark:              isDark              ?? this.isDark,
+      isOriginalsUnlocked: isOriginalsUnlocked ?? this.isOriginalsUnlocked,
     );
   }
 }
@@ -168,10 +214,9 @@ class AppThemeState {
 class ThemeNotifier extends StateNotifier<AppThemeState> {
   ThemeNotifier()
       : super(AppThemeState(
-          moodTheme:    'default',
-          accentColor:  AppColors.rose,
-          wallpaperPath: null,
-          isDark:        false,
+          moodTheme:   'default',
+          accentColor: AppColors.rose,
+          isDark:      false,
         )) {
     loadSettings();
   }
@@ -180,14 +225,16 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
   static const _prefAccent    = 'theme_accent_color';
   static const _prefWallpaper = 'theme_wallpaper_path';
   static const _prefIsDark    = 'theme_is_dark';
+  static const _prefOriginals = 'originals_unlocked';
 
   Future<void> loadSettings() async {
     try {
-      final prefs    = await SharedPreferences.getInstance();
-      final mood     = prefs.getString(_prefMood) ?? 'default';
-      final accentHex = prefs.getString(_prefAccent);
-      final wallpaper = prefs.getString(_prefWallpaper);
-      final isDark   = prefs.getBool(_prefIsDark) ?? false;
+      final prefs       = await SharedPreferences.getInstance();
+      final mood        = prefs.getString(_prefMood) ?? 'default';
+      final accentHex   = prefs.getString(_prefAccent);
+      final wallpaper   = prefs.getString(_prefWallpaper);
+      final isDark      = prefs.getBool(_prefIsDark) ?? false;
+      final originals   = prefs.getBool(_prefOriginals) ?? false;
 
       Color accent = AppColors.rose;
       if (accentHex != null) {
@@ -196,16 +243,16 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
       }
 
       state = AppThemeState(
-        moodTheme:    mood,
-        accentColor:  accent,
-        wallpaperPath: wallpaper,
-        isDark:        isDark,
+        moodTheme:           mood,
+        accentColor:         accent,
+        wallpaperPath:       wallpaper,
+        isDark:              isDark,
+        isOriginalsUnlocked: originals,
       );
     } catch (_) {}
   }
 
   Future<void> setMoodTheme(String theme) async {
-    // Auto-adjust dark flag to match theme intent
     final dark = _isDarkTheme(theme);
     state = state.copyWith(moodTheme: theme, isDark: dark);
     try {
@@ -221,6 +268,7 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
       case 'dateNight':
       case 'rainyMood':
       case 'anniversary':
+      case 'theOriginals':
         return true;
       default:
         return false;
@@ -251,6 +299,15 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
     } catch (_) {}
   }
 
+  /// Called when the 3-question quiz is successfully completed.
+  Future<void> unlockOriginals() async {
+    state = state.copyWith(isOriginalsUnlocked: true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefOriginals, true);
+    } catch (_) {}
+  }
+
   Future<Color> extractPaletteFromImage(File imageFile) async {
     try {
       final generator = await PaletteGenerator.fromImageProvider(
@@ -260,24 +317,20 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
       final color = generator.vibrantColor?.color ??
                     generator.dominantColor?.color ??
                     AppColors.rose;
-
       state = state.copyWith(accentColor: color);
-
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefAccent, color.toARGB32().toRadixString(16));
-
       return color;
     } catch (_) {
       return AppColors.rose;
     }
   }
 
-  // ── Material ThemeData (used by MaterialApp) ──────────────────────────────
+  // ── Material ThemeData ────────────────────────────────────────────────────
 
   ThemeData get themeData {
     final tc      = state.colors;
     final primary = state.accentColor;
-
     final brightness = state.isDark ? Brightness.dark : Brightness.light;
 
     final base = ThemeData(
@@ -303,30 +356,35 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
         displayColor: tc.textPrimary,
       ).copyWith(
         displayLarge: GoogleFonts.playfairDisplay(
-          fontSize: 28, fontWeight: FontWeight.w700, color: tc.textPrimary),
+          fontSize: 28, fontWeight: FontWeight.w700,
+          color: tc.textPrimary, fontStyle: FontStyle.normal),
         headlineMedium: GoogleFonts.playfairDisplay(
-          fontSize: 22, fontWeight: FontWeight.bold, color: tc.textPrimary),
+          fontSize: 22, fontWeight: FontWeight.bold,
+          color: tc.textPrimary, fontStyle: FontStyle.normal),
         titleLarge: GoogleFonts.dmSans(
-          fontSize: 18, fontWeight: FontWeight.w500, color: tc.textPrimary),
+          fontSize: 18, fontWeight: FontWeight.w500,
+          color: tc.textPrimary, fontStyle: FontStyle.normal),
         bodyMedium: GoogleFonts.dmSans(
           fontSize: 14, fontWeight: FontWeight.w400,
-          color: tc.textPrimary.withValues(alpha: 0.85)),
+          color: tc.textPrimary.withValues(alpha: 0.85),
+          fontStyle: FontStyle.normal),
         bodySmall: GoogleFonts.dmSans(
           fontSize: 12, fontWeight: FontWeight.w400,
-          color: tc.textMuted),
+          color: tc.textMuted, fontStyle: FontStyle.normal),
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: tc.backgroundColor,
-        foregroundColor: tc.textPrimary,
-        elevation: 0,
-        centerTitle: true,
-        titleTextStyle: GoogleFonts.playfairDisplay(
-          fontSize: 20, fontWeight: FontWeight.w700, color: primary),
+        backgroundColor:   tc.backgroundColor,
+        foregroundColor:   tc.textPrimary,
+        elevation:         0,
+        centerTitle:       true,
+        titleTextStyle:    GoogleFonts.playfairDisplay(
+          fontSize: 20, fontWeight: FontWeight.w700,
+          color: primary, fontStyle: FontStyle.normal),
       ),
       cardTheme: CardThemeData(
-        color: tc.cardColor,
+        color:     tc.cardColor,
         elevation: 0,
-        shape: RoundedRectangleBorder(
+        shape:     RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
           side: BorderSide(color: tc.borderColor, width: 1),
         ),
@@ -336,16 +394,22 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
         style: ElevatedButton.styleFrom(
           backgroundColor: primary,
           foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          minimumSize: const Size(double.infinity, 52),
-          textStyle: GoogleFonts.dmSans(fontWeight: FontWeight.w500, fontSize: 15),
+          elevation:       0,
+          shape:   RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          minimumSize: const Size(double.infinity, 54),
+          textStyle: GoogleFonts.dmSans(
+            fontWeight: FontWeight.w600, fontSize: 15,
+            fontStyle: FontStyle.normal),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled:    true,
         fillColor: tc.inputFillColor,
-        border: OutlineInputBorder(
+        border:    OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: tc.borderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(color: tc.borderColor),
         ),
@@ -354,8 +418,12 @@ class ThemeNotifier extends StateNotifier<AppThemeState> {
           borderSide: BorderSide(color: primary, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        hintStyle: GoogleFonts.dmSans(
+          color: tc.textMuted, fontSize: 14, fontStyle: FontStyle.normal),
+        labelStyle: GoogleFonts.dmSans(
+          color: tc.textSecondary, fontSize: 14, fontStyle: FontStyle.normal),
       ),
-      iconTheme: IconThemeData(color: tc.iconColor),
+      iconTheme:    IconThemeData(color: tc.iconColor),
       dividerColor: tc.borderColor,
     );
   }

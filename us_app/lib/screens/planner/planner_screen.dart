@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../config/app_colors.dart';
 import '../../models/reminder_model.dart';
 import '../../models/timetable_model.dart';
 import '../../providers/couple_provider.dart';
@@ -16,6 +17,10 @@ import '../../providers/theme_provider.dart';
 import '../../utils/pronoun_helper.dart';
 import '../../widgets/bottom_nav.dart';
 import '../../widgets/rose_button.dart';
+import '../../core/groq_client.dart';
+import '../../providers/memory_provider.dart';
+import '../../models/memory_model.dart';
+import '../../widgets/v2/glass_container.dart';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Screen
@@ -759,6 +764,14 @@ class _TimetableTabState extends ConsumerState<_TimetableTab> {
               tc:       tc,
             ),
             const SizedBox(height: 16),
+            if (overlaps.isNotEmpty) ...[
+              _AiDateSuggestionCard(
+                dayName: _kDays[_selectedDay],
+                freeTimeText: overlaps.join(', '),
+                tc: tc,
+              ),
+              const SizedBox(height: 16),
+            ],
             _DualScheduleView(
               mySlots:          mySlots,
               partnerSlots:     partnerSlots,
@@ -770,6 +783,180 @@ class _TimetableTabState extends ConsumerState<_TimetableTab> {
           ],
         );
       },
+    );
+  }
+}
+
+class _AiDateSuggestionCard extends ConsumerStatefulWidget {
+  const _AiDateSuggestionCard({
+    required this.dayName,
+    required this.freeTimeText,
+    required this.tc,
+  });
+
+  final String dayName;
+  final String freeTimeText;
+  final ThemeColors tc;
+
+  @override
+  ConsumerState<_AiDateSuggestionCard> createState() => _AiDateSuggestionCardState();
+}
+
+class _AiDateSuggestionCardState extends ConsumerState<_AiDateSuggestionCard> {
+  bool _isLoading = false;
+  String? _suggestion;
+
+  void _generateIdea() async {
+    setState(() => _isLoading = true);
+    try {
+      final memories = ref.read(memoryProvider).valueOrNull ?? [];
+      final partnerCare = memories.where((m) => m.isPartnerCare).map((m) => m.content).join('\n');
+      
+      final systemPrompt = "You are a romantic date planner assistant. Design a highly personalized, creative, and thoughtful date idea based on the partner's care memories, food preferences, and dislikes. Keep it under 80 words. Focus on specific activities and food recommendations. Use ₹ Indian Rupees for any pricing suggestions. Format as a warm conversational recommendation, strictly avoiding any italicized text.";
+      
+      final userPrompt = """
+Partner preferences and memories:
+$partnerCare
+
+We are both free on ${widget.dayName} from ${widget.freeTimeText}. What should we do together? Suggest a specific theme, spot, or recipe, and keep it incredibly romantic and premium!
+""";
+
+      final resp = await GroqClient.prompt(systemPrompt, userPrompt);
+      if (mounted) {
+        setState(() {
+          _suggestion = resp;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _suggestion = "Let's grab a cozy coffee and take a scenic walk together 💕";
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.rose.withOpacity(0.15),
+            AppColors.mauve.withOpacity(0.08),
+          ],
+        ),
+        border: Border.all(color: AppColors.rose.withOpacity(0.3)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('✨', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'AI Date Suggestion',
+                    style: GoogleFonts.playfairDisplay(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: widget.tc.textPrimary,
+                      fontStyle: FontStyle.normal,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              if (_suggestion != null) ...[
+                Text(
+                  _suggestion!,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    color: widget.tc.textSecondary,
+                    height: 1.4,
+                    fontStyle: FontStyle.normal,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _suggestion = null;
+                        });
+                      },
+                      icon: Icon(Icons.refresh, size: 16, color: AppColors.rose),
+                      label: Text(
+                        'Regenerate',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 12,
+                          color: AppColors.rose,
+                          fontWeight: FontWeight.w600,
+                          fontStyle: FontStyle.normal,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else if (_isLoading) ...[
+                const SizedBox(height: 10),
+                Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.rose),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ] else ...[
+                Text(
+                  "You're both free on ${widget.dayName} ${widget.freeTimeText}. Let's design the perfect surprise date!",
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    color: widget.tc.textSecondary,
+                    fontStyle: FontStyle.normal,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: _generateIdea,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.rose,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    child: Text(
+                      'Get Idea ✨',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        fontStyle: FontStyle.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

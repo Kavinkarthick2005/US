@@ -48,9 +48,9 @@ class _AddMemoryScreenState extends ConsumerState<AddMemoryScreen> {
       final ownerId = _aboutHer ? (partnerId ?? myId) : myId;
 
       await ref.read(memoryProvider.notifier).addMemory(
-            content,
-            _selectedCategory!,
-            ownerId,
+            content:  content,
+            category: _selectedCategory!,
+            ownerId:  ownerId,
           );
 
       if (mounted) {

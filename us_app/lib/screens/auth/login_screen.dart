@@ -1,165 +1,391 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../config/app_colors.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/rose_button.dart';
 
-class LoginScreen extends ConsumerWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    final isLoading = authState.isLoading;
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+}
 
-    // Listen for errors and show snackbar
-    ref.listen(authProvider, (previous, next) {
-      if (next is AsyncError) {
+class _LoginScreenState extends ConsumerState<LoginScreen>
+    with SingleTickerProviderStateMixin {
+  bool _isLoading = false;
+  late AnimationController _bgController;
+
+  @override
+  void initState() {
+    super.initState();
+    _bgController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _bgController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authProvider.notifier).signInWithGoogle();
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              next.error.toString(),
-              style: const TextStyle(color: Colors.white),
+              'Sign in failed. Please try again.',
+              style: GoogleFonts.dmSans(fontStyle: FontStyle.normal),
             ),
-            backgroundColor: AppColors.rose,
+            backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)),
           ),
         );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(authProvider, (_, next) {
+      final user = next.valueOrNull;
+      if (user != null) {
+        Supabase.instance.client
+            .from('profiles')
+            .select('gender')
+            .eq('id', user.id)
+            .maybeSingle()
+            .then((profile) {
+              if (mounted) {
+                if (profile == null || profile['gender'] == null) {
+                  context.go('/onboarding');
+                } else {
+                  context.go('/us-space');
+                }
+              }
+            }).catchError((_) {
+              if (mounted) context.go('/us-space');
+            });
       }
     });
 
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: [0.0, 0.5, 1.0],
-            colors: [
-              Color(0xFF1A0A0F),
-              Color(0xFF3D1020),
-              Color(0xFF1A0A0F),
-            ],
-          ),
-        ),
-        child: Stack(
-          children: [
-            // Decorative Area (Top 42%)
-            Positioned(
-              top: -50,
-              right: -50,
-              child: _BlurredCircle(
-                color: AppColors.rose.withValues(alpha: 0.4),
-                size: 200,
+      body: AnimatedBuilder(
+        animation: _bgController,
+        builder: (_, __) {
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: const [
+                  Color(0xFF0F0509),
+                  Color(0xFF1E0D14),
+                  Color(0xFF2A0F1A),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                stops: [0.0, 0.5 + _bgController.value * 0.15, 1.0],
               ),
             ),
-            Positioned(
-              top: 150,
-              left: -40,
-              child: _BlurredCircle(
-                color: AppColors.mauve.withValues(alpha: 0.3),
-                size: 150,
-              ),
-            ),
-
-            Column(
-              children: [
-                const Spacer(flex: 42),
-                // Bottom Container (Bottom 58%)
-                Expanded(
-                  flex: 58,
-                  child: Container(
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(32),
-                        topRight: Radius.circular(32),
+            child: SafeArea(
+              child: Stack(
+                children: [
+                  // Ambient glows
+                  Positioned(
+                    top: -40,
+                    right: -60,
+                    child: Container(
+                      width: 240,
+                      height: 240,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.rose
+                            .withValues(alpha: 0.10 + _bgController.value * 0.04),
                       ),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                  ),
+                  Positioned(
+                    bottom: 60,
+                    left: -80,
+                    child: Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.mauve
+                            .withValues(alpha: 0.08 + _bgController.value * 0.03),
+                      ),
+                    ),
+                  ),
+
+                  // Main content
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 48),
-                        RichText(
-                          text: TextSpan(
-                            style: GoogleFonts.playfairDisplay(
-                              fontSize: 26,
-                              color: AppColors.deep,
-                              height: 1.2,
-                            ),
-                            children: [
-                              const TextSpan(text: "Your love story,\n"),
-                              TextSpan(
-                                text: "starts here.",
-                                style: GoogleFonts.playfairDisplay(
-                                  
-                                  fontWeight: FontWeight.w600,
+                        const Spacer(flex: 2),
+
+                        // Logo + tagline
+                        Column(
+                          children: [
+                            Container(
+                              width: 90,
+                              height: 90,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    AppColors.rose,
+                                    AppColors.mauve,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.rose
+                                        .withValues(alpha: 0.35),
+                                    blurRadius: 30,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Us',
+                                  style: GoogleFonts.playfairDisplay(
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    fontStyle: FontStyle.normal,
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
+                            )
+                                .animate()
+                                .scale(
+                                  duration: 700.ms,
+                                  curve: Curves.elasticOut,
+                                  begin: const Offset(0.5, 0.5),
+                                ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'Your relationship,',
+                              style: GoogleFonts.playfairDisplay(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                fontStyle: FontStyle.normal,
+                              ),
+                            )
+                                .animate()
+                                .fadeIn(duration: 500.ms, delay: 200.ms),
+                            Text(
+                              'beautifully kept.',
+                              style: GoogleFonts.playfairDisplay(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.rose,
+                                fontStyle: FontStyle.normal,
+                              ),
+                            )
+                                .animate()
+                                .fadeIn(duration: 500.ms, delay: 350.ms),
+                            const SizedBox(height: 12),
+                            Text(
+                              'He Space • Us Space • She Space',
+                              style: GoogleFonts.dmSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.white.withValues(alpha: 0.45),
+                                fontStyle: FontStyle.normal,
+                              ),
+                            )
+                                .animate()
+                                .fadeIn(duration: 500.ms, delay: 500.ms),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Everything in one place. Just for the two of you.",
-                          style: GoogleFonts.dmSans(
-                            fontSize: 13,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                        RoseButton(
-                          label: "Continue with Google",
-                          isLoading: isLoading,
-                          onTap: () => ref.read(authProvider.notifier).signInWithGoogle(),
-                        ),
-                        const SizedBox(height: 24),
-                        Center(
-                          child: Text(
-                            "Private. Just the two of you.",
-                            style: GoogleFonts.dmSans(
-                              fontSize: 12,
-                              color: AppColors.muted,
+
+                        const Spacer(flex: 2),
+
+                        // Features strip
+                        _FeaturesRow()
+                            .animate()
+                            .fadeIn(duration: 500.ms, delay: 600.ms),
+
+                        const Spacer(flex: 1),
+
+                        // Google sign-in button
+                        _GoogleSignInButton(
+                          isLoading: _isLoading,
+                          onTap: _signIn,
+                        )
+                            .animate()
+                            .fadeIn(duration: 500.ms, delay: 700.ms)
+                            .slideY(
+                              begin: 0.3,
+                              end: 0,
+                              delay: 700.ms,
+                              duration: 400.ms,
+                              curve: Curves.easeOutCubic,
                             ),
+
+                        const SizedBox(height: 20),
+                        Text(
+                          'Private by design. Just the two of you.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.dmSans(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.3),
+                            fontStyle: FontStyle.normal,
                           ),
-                        ),
+                        )
+                            .animate()
+                            .fadeIn(duration: 500.ms, delay: 900.ms),
+
+                        const SizedBox(height: 32),
                       ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 }
 
-class _BlurredCircle extends StatelessWidget {
-  final Color color;
-  final double size;
+class _FeaturesRow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final features = [
+      ('📸', 'Drops'),
+      ('💌', 'Letters'),
+      ('💰', 'Expenses'),
+      ('🌸', 'Cycle'),
+      ('🤖', 'AI'),
+    ];
 
-  const _BlurredCircle({required this.color, required this.size});
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: features
+          .map(((String emoji, String label) f) => Column(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.rose.withValues(alpha: 0.12),
+                      border: Border.all(
+                        color: AppColors.rose.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(f.$1,
+                          style: const TextStyle(fontSize: 20)),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    f.$2,
+                    style: GoogleFonts.dmSans(
+                      fontSize: 10,
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontStyle: FontStyle.normal,
+                    ),
+                  ),
+                ],
+              ))
+          .toList(),
+    );
+  }
+}
+
+class _GoogleSignInButton extends StatelessWidget {
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _GoogleSignInButton({
+    required this.isLoading,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(color: Colors.transparent),
+    return GestureDetector(
+      onTap: isLoading ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (isLoading)
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(AppColors.rose),
+                ),
+              )
+            else ...[
+              // Google G icon
+              Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(shape: BoxShape.circle),
+                child: const Text(
+                  'G',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF4285F4),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Continue with Google',
+                style: GoogleFonts.dmSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF1A0A0F),
+                  fontStyle: FontStyle.normal,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

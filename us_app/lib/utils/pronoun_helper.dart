@@ -24,4 +24,12 @@ class PronounHelper {
   }
 
   static String world(String pronoun) => '${possessive(pronoun)} World';
+
+  static String loves(String pronoun) {
+    switch (pronoun) {
+      case 'they': return 'They love';
+      case 'he': return 'He loves';
+      default: return 'She loves';
+    }
+  }
 }

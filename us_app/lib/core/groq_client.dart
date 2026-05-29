@@ -4,7 +4,9 @@ import '../config/env.dart';
 
 class GroqClient {
   static const _baseUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  static const _model = 'llama-3.1-8b-instant';
+  static const _model   = 'llama-3.1-8b-instant';
+
+  // ── Chat — used by AI companion ───────────────────────────────────────────
 
   static Future<String> chat(
     String userMessage,
@@ -23,11 +25,42 @@ Never be manipulative. Never suggest surveillance.
 Help with: date ideas, gifts, cooking, care, communication.
 """;
 
-    // Take at most the last 6 messages from the history
-    final conversationHistory = history.length > 6 
-        ? history.sublist(history.length - 6) 
+    final conversationHistory = history.length > 6
+        ? history.sublist(history.length - 6)
         : history;
 
+    return _call(
+      messages: [
+        {'role': 'system', 'content': systemMessage.trim()},
+        ...conversationHistory,
+        {'role': 'user', 'content': userMessage},
+      ],
+      maxTokens: 400,
+    );
+  }
+
+  // ── Prompt — used by gift search, food AI, and other one-shot features ────
+
+  static Future<String> prompt(
+    String systemPrompt,
+    String userPrompt, {
+    int maxTokens = 600,
+  }) async {
+    return _call(
+      messages: [
+        {'role': 'system', 'content': systemPrompt.trim()},
+        {'role': 'user',   'content': userPrompt},
+      ],
+      maxTokens: maxTokens,
+    );
+  }
+
+  // ── Internal ──────────────────────────────────────────────────────────────
+
+  static Future<String> _call({
+    required List<Map<String, String>> messages,
+    int maxTokens = 400,
+  }) async {
     try {
       final response = await http.post(
         Uri.parse(_baseUrl),
@@ -36,16 +69,12 @@ Help with: date ideas, gifts, cooking, care, communication.
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Connection': 'keep-alive',
-          'User-Agent': 'UsApp/1.0',
+          'User-Agent': 'UsApp/2.0',
         },
         body: jsonEncode({
-          'model': _model,
-          'messages': [
-            {'role': 'system', 'content': systemMessage.trim()},
-            ...conversationHistory,
-            {'role': 'user', 'content': userMessage},
-          ],
-          'max_tokens': 400,
+          'model':       _model,
+          'messages':    messages,
+          'max_tokens':  maxTokens,
           'temperature': 0.75,
         }),
       );

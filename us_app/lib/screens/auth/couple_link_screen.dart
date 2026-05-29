@@ -57,7 +57,7 @@ class _CoupleLinkScreenState extends ConsumerState<CoupleLinkScreen>
       _confettiController.forward();
 
       await Future.delayed(const Duration(milliseconds: 1500));
-      if (mounted) context.go('/home');
+      if (mounted) context.go('/us-space');
     } catch (e) {
       setState(() => _isLinking = false);
       if (!mounted) return;
@@ -168,7 +168,7 @@ class _CoupleLinkScreenState extends ConsumerState<CoupleLinkScreen>
                 const SizedBox(height: 24),
 
                 TextButton(
-                  onPressed: () => context.go('/home'),
+                  onPressed: () => context.go('/us-space'),
                   style: TextButton.styleFrom(
                     foregroundColor: AppColors.rose,
                   ),

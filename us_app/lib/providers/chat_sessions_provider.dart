@@ -4,6 +4,12 @@ import 'package:uuid/uuid.dart';
 
 import '../core/groq_client.dart';
 import 'memory_provider.dart';
+import 'partner_care_provider.dart';
+import 'drops_provider.dart';
+import 'period_provider.dart';
+import 'timetable_provider.dart';
+import 'expense_provider.dart';
+import 'wishlist_provider.dart';
 
 // ── Models ────────────────────────────────────────────────────────────────────
 
@@ -287,14 +293,65 @@ class ChatSessionsNotifier extends StateNotifier<ChatSessionsState> {
 
     try {
       // Build partner context
-      final memoryNotifier = _ref.read(memoryProvider.notifier);
-      var memories = memoryNotifier.partnerMemories;
-      if (memories.isEmpty) {
-        memories = _ref.read(memoryProvider).valueOrNull ?? [];
+      final partnerCareMemories = _ref.read(partnerCareProvider).valueOrNull ?? [];
+      final partnerCareText = partnerCareMemories.isEmpty
+          ? 'No specific Partner Care memories recorded yet.'
+          : partnerCareMemories.map((m) => '- [${m.category}]: ${m.content}').join('\n');
+
+      final drops = _ref.read(dropsProvider).valueOrNull ?? [];
+      final dropsText = drops.isEmpty
+          ? 'No drops shared yet.'
+          : drops.take(3).map((d) => '- Sent by ${d.addedBy}: "${d.caption ?? "Photo"}" (song: ${d.songTitle ?? "none"})').join('\n');
+
+      final periodState = _ref.read(periodProvider.notifier);
+      final currentlyOnPeriod = periodState.currentlyOnPeriod;
+      final daysUntilNext = periodState.daysUntilNext;
+      final periodStatus = currentlyOnPeriod
+          ? "Partner is currently on her period cycle. Offer extra support, comfort foods, and love 💕"
+          : (daysUntilNext != null ? "Partner's period starts in $daysUntilNext days." : "No period cycle logged yet.");
+
+      final timetableNotifier = _ref.read(timetableProvider.notifier);
+      final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      final overlapList = <String>[];
+      for (int i = 0; i < 7; i++) {
+        final overlaps = timetableNotifier.getFreeOverlapForDay(i);
+        if (overlaps.isNotEmpty) {
+          overlapList.add('${days[i]}: ${overlaps.join(', ')}');
+        }
       }
-      final partnerContext = memories.isEmpty
-          ? 'No specific memories or preferences recorded yet.'
-          : memories.map((m) => '- [${m.category}]: ${m.content}').join('\n');
+      final timetableContextText = overlapList.isEmpty
+          ? "No shared free timetable slots logged yet."
+          : overlapList.join('\n');
+
+      final expenses = _ref.read(expenseProvider).valueOrNull ?? [];
+      final expensesText = expenses.isEmpty
+          ? 'No shared expenses logged yet.'
+          : expenses.take(3).map((e) => '- ${e.description ?? "Expense"}: ₹${e.amount} (${e.isLoan ? "Loan" : "Shared"})').join('\n');
+
+      final wishlist = _ref.read(wishlistProvider).valueOrNull ?? [];
+      final wishlistText = wishlist.isEmpty
+          ? 'No wishlist items added yet.'
+          : wishlist.where((w) => !w.isDone && !w.isHidden).take(3).map((w) => '- ${w.title} (${w.type}, price: ₹${w.price ?? "N/A"})').join('\n');
+
+      final partnerContext = """
+PARTNER CARE MEMORIES:
+$partnerCareText
+
+RECENT DROPS MOMENTS:
+$dropsText
+
+PERIOD STATUS:
+$periodStatus
+
+TIMETABLE FREE TIME OVERLAPS:
+$timetableContextText
+
+RECENT SHARED FINANCES:
+$expensesText
+
+WISHLIST ITEMS:
+$wishlistText
+""";
 
       // Build history from active messages
       final history = state.activeMessages

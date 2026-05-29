@@ -17,6 +17,7 @@ class UserModel {
   final String? coupleId;
   final String? fcmToken;
   final String partnerPronoun;
+  final String? gender;
 
   UserModel({
     required this.id,
@@ -28,6 +29,7 @@ class UserModel {
     this.coupleId,
     this.fcmToken,
     this.partnerPronoun = 'she',
+    this.gender,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class UserModel {
       coupleId: json['couple_id'] as String?,
       fcmToken: json['fcm_token'] as String?,
       partnerPronoun: json['partner_pronoun'] as String? ?? 'she',
+      gender: json['gender'] as String?,
     );
   }
 }
@@ -204,6 +207,29 @@ class CoupleNotifier extends AsyncNotifier<CoupleState> {
       // Optimistic UI update can optionally be done here, but _subscribeToProfile should catch it
     } catch (e) {
       // Handle error if needed
+    }
+  }
+
+  Future<void> completeOnboarding({
+    required String name,
+    required String gender,
+    required String pronoun,
+    String? avatarUrl,
+  }) async {
+    try {
+      final myId = _supabase.auth.currentUser?.id;
+      if (myId == null) throw Exception('Not authenticated');
+
+      await _supabase.from('profiles').update({
+        'name': name,
+        'gender': gender,
+        'partner_pronoun': pronoun,
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
+      }).eq('id', myId);
+
+      ref.invalidateSelf();
+    } catch (e) {
+      rethrow;
     }
   }
 

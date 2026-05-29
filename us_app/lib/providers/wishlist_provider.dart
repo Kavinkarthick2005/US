@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/wishlist_model.dart';
 import 'couple_provider.dart';
@@ -51,33 +52,66 @@ class WishlistNotifier extends AsyncNotifier<List<WishlistModel>> {
     await _sb.from('wishlist').update({'is_hidden': true}).eq('id', id);
     ref.invalidateSelf();
   }
+  
+  Future<void> unhideItem(String id) async {
+    await _sb.from('wishlist').update({'is_hidden': false}).eq('id', id);
+    ref.invalidateSelf();
+  }
 
   Future<void> deleteItem(String id) async {
     await _sb.from('wishlist').delete().eq('id', id);
     ref.invalidateSelf();
   }
 
-  List<WishlistModel> get buyItems =>
-      (state.valueOrNull ?? [])
-          .where((i) => i.type == WishlistModel.typeBuy && !i.isDone && !i.isHidden)
-          .toList();
+  // --- GETTERS ---
+  List<WishlistModel> get myItems {
+    final myId = _sb.auth.currentUser?.id;
+    return (state.valueOrNull ?? [])
+        .where((i) => i.addedBy == myId && i.visibility == 'mine' && !i.isHidden)
+        .toList();
+  }
 
-  List<WishlistModel> get experienceItems =>
-      (state.valueOrNull ?? [])
-          .where((i) => i.type == WishlistModel.typeExperience && !i.isDone && !i.isHidden)
-          .toList();
+  List<WishlistModel> get theirItems {
+    final myId = _sb.auth.currentUser?.id;
+    return (state.valueOrNull ?? [])
+        .where((i) => i.addedBy == myId && i.visibility == 'theirs' && !i.isHidden)
+        .toList();
+  }
 
-  List<WishlistModel> get doneItems =>
-      (state.valueOrNull ?? []).where((i) => i.isDone && !i.isHidden).toList();
+  List<WishlistModel> get oursItems {
+    return (state.valueOrNull ?? [])
+        .where((i) => i.visibility == 'shared' && !i.isHidden)
+        .toList();
+  }
 
-  List<WishlistModel> get hiddenItems =>
-      (state.valueOrNull ?? []).where((i) => i.isHidden).toList();
+  List<WishlistModel> get hiddenItems {
+    final myId = _sb.auth.currentUser?.id;
+    return (state.valueOrNull ?? [])
+        .where((i) => i.isHidden && i.addedBy == myId)
+        .toList();
+  }
 
   double get totalBuyBudget =>
       (state.valueOrNull ?? [])
-          .where((i) =>
-              i.type == WishlistModel.typeBuy && !i.isDone && !i.isHidden && i.price != null)
+          .where((i) => !i.isDone && !i.isHidden && i.price != null)
           .fold(0.0, (s, i) => s + (i.price ?? 0));
+          
+  // --- PIN SYSTEM ---
+  Future<void> savePIN(String pin) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('wishlist_pin', pin);
+  }
+
+  Future<bool> verifyPIN(String pin) async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('wishlist_pin');
+    return saved != null && saved == pin;
+  }
+
+  Future<bool> get isPINSet async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey('wishlist_pin');
+  }
 }
 
 final wishlistProvider =

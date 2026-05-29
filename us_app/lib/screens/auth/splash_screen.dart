@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../config/app_colors.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SplashScreen
-// ─────────────────────────────────────────────────────────────────────────────
+import '../../widgets/v2/easter_egg_overlay.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -18,220 +15,242 @@ class SplashScreen extends ConsumerStatefulWidget {
 }
 
 class _SplashScreenState extends ConsumerState<SplashScreen>
-    with TickerProviderStateMixin {
-  // ── Animation controllers ───────────────────────────────────────────────
-  late final AnimationController _logoCtrl;
-  late final AnimationController _taglineCtrl;
-
-  late final Animation<double> _logoOpacity;
-  late final Animation<Offset> _logoSlide;
-  late final Animation<double> _taglineOpacity;
+    with SingleTickerProviderStateMixin, LogoEasterEggMixin {
+  late AnimationController _bgController;
 
   @override
   void initState() {
     super.initState();
-
-    // Logo: 800 ms fade + slide
-    _logoCtrl = AnimationController(
+    _bgController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _logoOpacity = CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOut);
-    _logoSlide = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOut));
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
 
-    // Tagline: fades in 200 ms after logo starts
-    _taglineCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _taglineOpacity =
-        CurvedAnimation(parent: _taglineCtrl, curve: Curves.easeOut);
-
-    _runSequence();
-  }
-
-  Future<void> _runSequence() async {
-    // Start logo animation
-    _logoCtrl.forward();
-    // Start tagline 200 ms later
-    await Future.delayed(const Duration(milliseconds: 200));
-    _taglineCtrl.forward();
-    // Navigate after 2200 ms total
-    await Future.delayed(const Duration(milliseconds: 2000));
     _navigate();
-  }
-
-  Future<void> _navigate() async {
-    if (!mounted) return;
-
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) {
-      context.go('/login');
-      return;
-    }
-
-    try {
-      final data = await Supabase.instance.client
-          .from('profiles')
-          .select('partner_id')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (!mounted) return;
-      final hasPartner = data != null && data['partner_id'] != null;
-      context.go(hasPartner ? '/home' : '/link-partner');
-    } catch (_) {
-      if (!mounted) return;
-      context.go('/link-partner');
-    }
   }
 
   @override
   void dispose() {
-    _logoCtrl.dispose();
-    _taglineCtrl.dispose();
+    _bgController.dispose();
     super.dispose();
+  }
+
+  Future<void> _navigate() async {
+    await Future.delayed(const Duration(milliseconds: 2200));
+    if (!mounted) return;
+
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null) {
+      try {
+        final profile = await Supabase.instance.client
+            .from('profiles')
+            .select('gender')
+            .eq('id', user.id)
+            .maybeSingle();
+        if (mounted) {
+          if (profile == null || profile['gender'] == null) {
+            context.go('/onboarding');
+          } else {
+            context.go('/us-space');
+          }
+        }
+      } catch (_) {
+        if (mounted) context.go('/us-space');
+      }
+    } else {
+      context.go('/login');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            // 135 deg gradient: deep → dark rose → deep
-            stops: [0.0, 0.5, 1.0],
-            colors: [
-              Color(0xFF1A0A0F),
-              Color(0xFF3D1020),
-              Color(0xFF1A0A0F),
-            ],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FadeTransition(
-                opacity: _logoOpacity,
-                child: SlideTransition(
-                  position: _logoSlide,
-                  child: Text(
-                    'Us',
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 68,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ),
+      body: AnimatedBuilder(
+        animation: _bgController,
+        builder: (_, __) {
+          return Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: const [
+                  Color(0xFF0F0509),
+                  Color(0xFF1E0D14),
+                  Color(0xFF2E1020),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [
+                  0.0,
+                  0.5 + _bgController.value * 0.2,
+                  1.0,
+                ],
               ),
-              const SizedBox(height: 8),
+            ),
+            child: Stack(
+              children: [
+                // Ambient glow circles
+                _GlowCircle(
+                  color: const Color(0xFFE8607A),
+                  size: 280,
+                  top: -60,
+                  left: -80,
+                  opacity: 0.12 + _bgController.value * 0.05,
+                ),
+                _GlowCircle(
+                  color: const Color(0xFFC97B93),
+                  size: 200,
+                  bottom: 40,
+                  right: -60,
+                  opacity: 0.10 + _bgController.value * 0.04,
+                ),
 
-              // ── Tagline ─────────────────────────────────────────────
-              FadeTransition(
-                opacity: _taglineOpacity,
-                child: Text(
-                  'made with love',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    color: AppColors.roseLight,
-                    letterSpacing: 1.2,
+                // Main content
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Logo — long-press triggers Easter egg
+                      GestureDetector(
+                        onLongPress: handleLogoLongPress,
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 110,
+                              height: 110,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFFE8607A),
+                                    Color(0xFFC97B93),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFE8607A)
+                                        .withValues(alpha: 0.4),
+                                    blurRadius: 40,
+                                    spreadRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Us',
+                                  style: GoogleFonts.playfairDisplay(
+                                    fontSize: 42,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    fontStyle: FontStyle.normal,
+                                  ),
+                                ),
+                              ),
+                            )
+                                .animate(
+                                  onPlay: (c) =>
+                                      c.repeat(reverse: true),
+                                )
+                                .scale(
+                                  begin: const Offset(0.97, 0.97),
+                                  end: const Offset(1.03, 1.03),
+                                  duration: 2000.ms,
+                                  curve: Curves.easeInOut,
+                                ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'a space only for us',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontStyle: FontStyle.normal,
+                        ),
+                      )
+                          .animate()
+                          .fadeIn(duration: 600.ms, delay: 500.ms),
+
+                      const SizedBox(height: 64),
+
+                      // Loading indicator
+                      SizedBox(
+                        width: 40,
+                        child: LinearProgressIndicator(
+                          backgroundColor:
+                              Colors.white.withValues(alpha: 0.1),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFFE8607A)),
+                          minHeight: 2,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      )
+                          .animate()
+                          .fadeIn(duration: 400.ms, delay: 800.ms),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
+
+                // Version tag
+                Positioned(
+                  bottom: 40,
+                  left: 0,
+                  right: 0,
+                  child: Text(
+                    'V2',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.dmMono(
+                      fontSize: 11,
+                      color: Colors.white.withValues(alpha: 0.2),
+                      fontStyle: FontStyle.normal,
+                    ),
+                  ).animate().fadeIn(duration: 600.ms, delay: 1200.ms),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Heart CustomPainter
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _HeartIcon extends StatelessWidget {
-  const _HeartIcon({
-    required this.color,
-    this.width = 40,
-    this.height = 36,
-  });
-
+class _GlowCircle extends StatelessWidget {
   final Color color;
-  final double width;
-  final double height;
+  final double size;
+  final double? top;
+  final double? bottom;
+  final double? left;
+  final double? right;
+  final double opacity;
+
+  const _GlowCircle({
+    required this.color,
+    required this.size,
+    this.top,
+    this.bottom,
+    this.left,
+    this.right,
+    required this.opacity,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: Size(width, height),
-      painter: _HeartPainter(color: color),
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      left: left,
+      right: right,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withValues(alpha: opacity),
+        ),
+      ),
     );
   }
-}
-
-class _HeartPainter extends CustomPainter {
-  const _HeartPainter({required this.color});
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final w = size.width;
-    final h = size.height;
-
-    final path = Path();
-    // Classic heart shape built from cubic beziers
-    path.moveTo(w * 0.5, h * 0.85);
-    path.cubicTo(
-      w * 0.1,
-      h * 0.6,
-      -w * 0.05,
-      h * 0.35,
-      w * 0.25,
-      h * 0.2,
-    );
-    path.cubicTo(
-      w * 0.4,
-      h * 0.1,
-      w * 0.5,
-      h * 0.2,
-      w * 0.5,
-      h * 0.3,
-    );
-    path.cubicTo(
-      w * 0.5,
-      h * 0.2,
-      w * 0.6,
-      h * 0.1,
-      w * 0.75,
-      h * 0.2,
-    );
-    path.cubicTo(
-      w * 1.05,
-      h * 0.35,
-      w * 0.9,
-      h * 0.6,
-      w * 0.5,
-      h * 0.85,
-    );
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_HeartPainter old) => old.color != color;
 }
