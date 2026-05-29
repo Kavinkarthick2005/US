@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../config/app_colors.dart';
 import '../../models/song_model.dart';
+import '../../models/memory_model.dart';
 import '../../providers/music_provider.dart';
 import '../../providers/memory_provider.dart';
 import '../../providers/theme_provider.dart';
